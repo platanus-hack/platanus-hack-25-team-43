@@ -1,0 +1,637 @@
+"use client"
+
+import { useState } from "react"
+import { Card } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { analyzeStudentResponses } from "@/lib/llm-client"
+
+type OnboardingStep = "schoolInfo" | "motivation" | "goals" | "grades" | "pathways" | "selection" | "summary"
+
+interface GradeEntry {
+  subject: string
+  grade: number
+}
+
+interface OnboardingData {
+  name: string
+  schoolType: "colegio" | "universidad"
+  schoolName: string
+  currentYear: number
+  motivation: string
+  goals: string
+  grades: GradeEntry[]
+  selectedPathways: string[]
+  customTracks: string[]
+}
+
+interface PathwayData {
+  name: string
+  rationale: string
+  actionSteps: string[]
+  timeline: string
+}
+
+interface OnboardingModalProps {
+  onComplete: () => void
+}
+
+export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
+  const [currentStep, setCurrentStep] = useState<OnboardingStep>("schoolInfo")
+  const [data, setData] = useState<OnboardingData>({
+    name: localStorage.getItem("userName") || "",
+    schoolType: "colegio",
+    schoolName: "",
+    currentYear: 1,
+    motivation: "",
+    goals: "",
+    grades: [],
+    selectedPathways: [],
+    customTracks: [],
+  })
+  const [recommendedPathways, setRecommendedPathways] = useState<PathwayData[]>([])
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+
+  const handleNext = async () => {
+    const steps: OnboardingStep[] = ["schoolInfo", "motivation", "goals", "grades", "pathways", "selection", "summary"]
+    const currentIndex = steps.indexOf(currentStep)
+
+    if (currentStep === "grades" && currentIndex < steps.length - 1) {
+      setIsAnalyzing(true)
+      try {
+        const pathways = await analyzeStudentResponses({
+          name: data.name,
+          schoolType: data.schoolType,
+          schoolName: data.schoolName,
+          currentYear: data.currentYear,
+          motivation: data.motivation,
+          goals: data.goals,
+          grades: data.grades,
+        })
+        setRecommendedPathways(pathways)
+      } catch (error) {
+        console.error("[v0] Error analyzing responses:", error)
+      } finally {
+        setIsAnalyzing(false)
+      }
+    }
+
+    if (currentIndex < steps.length - 1) {
+      setCurrentStep(steps[currentIndex + 1])
+    }
+  }
+
+  const handlePrevious = () => {
+    const steps: OnboardingStep[] = ["schoolInfo", "motivation", "goals", "grades", "pathways", "selection", "summary"]
+    const currentIndex = steps.indexOf(currentStep)
+    if (currentIndex > 0) {
+      setCurrentStep(steps[currentIndex - 1])
+    }
+  }
+
+  const handleSelectPathway = (pathway: string) => {
+    setData((prev) => ({
+      ...prev,
+      selectedPathways: prev.selectedPathways.includes(pathway)
+        ? prev.selectedPathways.filter((p) => p !== pathway)
+        : [...prev.selectedPathways, pathway],
+    }))
+  }
+
+  const handleComplete = () => {
+    const completeData = {
+      ...data,
+      recommendedPathways,
+      completedAt: new Date().toISOString(),
+      permanent: true, // Mark as permanent - cannot be retaken
+    }
+    // Save onboarding data permanently
+    localStorage.setItem("onboardingData", JSON.stringify(completeData))
+    localStorage.setItem("onboardingComplete", "true")
+    localStorage.setItem("onboardingCompletedDate", new Date().toISOString())
+    
+    console.log("[Onboarding] Profile saved permanently:", {
+      name: data.name,
+      pathways: data.selectedPathways,
+      timestamp: new Date().toISOString()
+    })
+    
+    onComplete()
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-fade-in">
+      <Card className="w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto animate-slide-up">
+        {currentStep === "schoolInfo" && (
+          <SchoolInfoStep data={data} onUpdate={(updates) => setData({ ...data, ...updates })} onNext={handleNext} />
+        )}
+        {currentStep === "motivation" && (
+          <MotivationStep
+            data={data}
+            onUpdate={(updates) => setData({ ...data, ...updates })}
+            onNext={handleNext}
+            onPrevious={handlePrevious}
+          />
+        )}
+        {currentStep === "goals" && (
+          <GoalsStep
+            data={data}
+            onUpdate={(updates) => setData({ ...data, ...updates })}
+            onNext={handleNext}
+            onPrevious={handlePrevious}
+          />
+        )}
+        {currentStep === "grades" && (
+          <GradesStep
+            data={data}
+            onUpdate={(updates) => setData({ ...data, ...updates })}
+            onNext={handleNext}
+            onPrevious={handlePrevious}
+            isAnalyzing={isAnalyzing}
+          />
+        )}
+        {currentStep === "pathways" && (
+          <PathwaysStep
+            recommendedPathways={recommendedPathways}
+            selectedPathways={data.selectedPathways}
+            onSelectPathway={handleSelectPathway}
+            onNext={handleNext}
+            onPrevious={handlePrevious}
+          />
+        )}
+        {currentStep === "selection" && (
+          <SelectionStep
+            selectedPathways={data.selectedPathways}
+            onAddCustomTrack={(track) => {
+              setData((prev) => ({
+                ...prev,
+                customTracks: [...prev.customTracks, track],
+                selectedPathways: [...prev.selectedPathways, track],
+              }))
+            }}
+            onNext={handleNext}
+            onPrevious={handlePrevious}
+          />
+        )}
+        {currentStep === "summary" && (
+          <SummaryStep
+            data={data}
+            selectedPathways={data.selectedPathways}
+            onComplete={handleComplete}
+            onPrevious={handlePrevious}
+          />
+        )}
+      </Card>
+    </div>
+  )
+}
+
+function SchoolInfoStep({
+  data,
+  onUpdate,
+  onNext,
+}: {
+  data: OnboardingData
+  onUpdate: (updates: Partial<OnboardingData>) => void
+  onNext: () => void
+}) {
+  return (
+    <div className="p-8">
+      <h2 className="text-2xl font-bold text-foreground mb-2">Bienvenido a tu Ruta de Éxito</h2>
+      <p className="text-muted-foreground mb-6">Comencemos por conocer tu situación actual</p>
+
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-3">¿En qué estás estudiando?</label>
+          <div className="space-y-2">
+            {["colegio", "universidad"].map((type) => (
+              <button
+                key={type}
+                onClick={() => onUpdate({ schoolType: type as "colegio" | "universidad" })}
+                className={`w-full p-3 text-left rounded-lg border-2 transition-all ${
+                  data.schoolType === type ? "border-primary bg-primary/10" : "border-input hover:border-primary/50"
+                }`}
+              >
+                {type === "colegio" ? "Colegio" : "Universidad"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">
+            Nombre de tu {data.schoolType === "colegio" ? "colegio" : "universidad"}
+          </label>
+          <input
+            type="text"
+            placeholder={`Ej: ${data.schoolType === "colegio" ? "Colegio Andrés Bello" : "Universidad de los Andes"}`}
+            value={data.schoolName}
+            onChange={(e) => onUpdate({ schoolName: e.target.value })}
+            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">¿En qué año estás?</label>
+          <select
+            value={data.currentYear}
+            onChange={(e) => onUpdate({ currentYear: Number.parseInt(e.target.value) })}
+            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            {data.schoolType === "colegio"
+              ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((year) => (
+                  <option key={year} value={year}>
+                    Año {year}
+                  </option>
+                ))
+              : [1, 2, 3, 4, 5, 6].map((year) => (
+                  <option key={year} value={year}>
+                    Año {year}
+                  </option>
+                ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="flex gap-4 mt-8">
+        <Button variant="outline" className="flex-1 bg-transparent" onClick={() => window.location.reload()}>
+          Cancelar
+        </Button>
+        <Button className="flex-1 bg-primary text-primary-foreground" onClick={onNext} disabled={!data.schoolName}>
+          Siguiente
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function MotivationStep({
+  data,
+  onUpdate,
+  onNext,
+  onPrevious,
+}: {
+  data: OnboardingData
+  onUpdate: (updates: Partial<OnboardingData>) => void
+  onNext: () => void
+  onPrevious: () => void
+}) {
+  return (
+    <div className="p-8">
+      <h2 className="text-2xl font-bold text-foreground mb-2">¿Qué te motiva?</h2>
+      <p className="text-muted-foreground mb-6">Una pregunta a la vez - comencemos</p>
+
+      <div>
+        <label className="block text-sm font-medium mb-4">¿Cuál es tu principal motivación en tu carrera?</label>
+        <textarea
+          value={data.motivation}
+          onChange={(e) => onUpdate({ motivation: e.target.value })}
+          placeholder="Ej: Quiero ayudar a mi comunidad, busco estabilidad económica, me apasiona la tecnología..."
+          rows={4}
+          className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+        />
+      </div>
+
+      <div className="flex gap-4 mt-8">
+        <Button variant="outline" className="flex-1 bg-transparent" onClick={onPrevious}>
+          Anterior
+        </Button>
+        <Button className="flex-1 bg-primary text-primary-foreground" onClick={onNext} disabled={!data.motivation}>
+          Siguiente
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function GoalsStep({
+  data,
+  onUpdate,
+  onNext,
+  onPrevious,
+}: {
+  data: OnboardingData
+  onUpdate: (updates: Partial<OnboardingData>) => void
+  onNext: () => void
+  onPrevious: () => void
+}) {
+  return (
+    <div className="p-8">
+      <h2 className="text-2xl font-bold text-foreground mb-2">Tus Objetivos</h2>
+      <p className="text-muted-foreground mb-6">Una pregunta a la vez</p>
+
+      <div>
+        <label className="block text-sm font-medium mb-4">¿Cuáles son tus metas para los próximos 3-5 años?</label>
+        <textarea
+          value={data.goals}
+          onChange={(e) => onUpdate({ goals: e.target.value })}
+          placeholder="Ej: Quiero estudiar en una universidad internacional, conseguir una beca, trabajar en una startup..."
+          rows={4}
+          className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+        />
+      </div>
+
+      <div className="flex gap-4 mt-8">
+        <Button variant="outline" className="flex-1 bg-transparent" onClick={onPrevious}>
+          Anterior
+        </Button>
+        <Button className="flex-1 bg-primary text-primary-foreground" onClick={onNext} disabled={!data.goals}>
+          Siguiente
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function GradesStep({
+  data,
+  onUpdate,
+  onNext,
+  onPrevious,
+  isAnalyzing,
+}: {
+  data: OnboardingData
+  onUpdate: (updates: Partial<OnboardingData>) => void
+  onNext: () => void
+  onPrevious: () => void
+  isAnalyzing: boolean
+}) {
+  const [subject, setSubject] = useState("")
+  const [grade, setGrade] = useState(5)
+
+  const handleAddGrade = () => {
+    if (subject.trim()) {
+      const updatedGrades = [
+        ...data.grades,
+        {
+          subject: subject.trim(),
+          grade,
+        },
+      ]
+      onUpdate({ grades: updatedGrades })
+      setSubject("")
+      setGrade(5)
+    }
+  }
+
+  const handleRemoveGrade = (index: number) => {
+    const updatedGrades = data.grades.filter((_, i) => i !== index)
+    onUpdate({ grades: updatedGrades })
+  }
+
+  return (
+    <div className="p-8">
+      <h2 className="text-2xl font-bold text-foreground mb-2">Tus Notas</h2>
+      <p className="text-muted-foreground mb-6">Agrega tus materias y calificaciones</p>
+
+      <div className="space-y-4 mb-6">
+        <div>
+          <label className="block text-sm font-medium mb-2">Materia</label>
+          <input
+            type="text"
+            placeholder="Ej: Matemáticas, Inglés, Historia..."
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">Calificación (0-10)</label>
+          <input
+            type="number"
+            min="0"
+            max="10"
+            step="0.5"
+            value={grade}
+            onChange={(e) => setGrade(Number.parseFloat(e.target.value))}
+            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+
+        <Button
+          type="button"
+          onClick={handleAddGrade}
+          disabled={!subject.trim()}
+          className="w-full bg-secondary text-secondary-foreground"
+        >
+          Agregar Materia
+        </Button>
+      </div>
+
+      {data.grades.length > 0 && (
+        <div className="mb-6 p-4 bg-muted rounded-lg">
+          <h3 className="font-medium mb-3">Materias agregadas:</h3>
+          <div className="space-y-2">
+            {data.grades.map((entry, index) => (
+              <div key={index} className="flex justify-between items-center p-2 bg-background rounded">
+                <span>
+                  {entry.subject}: <span className="font-bold text-primary">{entry.grade}/10</span>
+                </span>
+                <button
+                  onClick={() => handleRemoveGrade(index)}
+                  className="text-red-500 hover:text-red-700 text-sm font-medium"
+                >
+                  Eliminar
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex gap-4 mt-8">
+        <Button variant="outline" className="flex-1 bg-transparent" onClick={onPrevious} disabled={isAnalyzing}>
+          Anterior
+        </Button>
+        <Button
+          className="flex-1 bg-primary text-primary-foreground"
+          onClick={onNext}
+          disabled={data.grades.length === 0 || isAnalyzing}
+        >
+          {isAnalyzing ? "Analizando..." : "Siguiente"}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function PathwaysStep({
+  recommendedPathways,
+  selectedPathways,
+  onSelectPathway,
+  onNext,
+  onPrevious,
+}: {
+  recommendedPathways: PathwayData[]
+  selectedPathways: string[]
+  onSelectPathway: (pathway: string) => void
+  onNext: () => void
+  onPrevious: () => void
+}) {
+  return (
+    <div className="p-8">
+      <h2 className="text-2xl font-bold text-foreground mb-2">Tus Caminos Recomendados</h2>
+      <p className="text-muted-foreground mb-6">Basado en tu perfil, aquí hay 3 caminos personalizados para ti</p>
+
+      <div className="space-y-4 mb-6">
+        {recommendedPathways.map((pathway) => (
+          <button
+            key={pathway.name}
+            onClick={() => onSelectPathway(pathway.name)}
+            className={`w-full p-4 text-left rounded-lg border-2 transition-all ${
+              selectedPathways.includes(pathway.name)
+                ? "border-primary bg-primary/10"
+                : "border-input hover:border-primary/50"
+            }`}
+          >
+            <h3 className="font-bold text-foreground mb-1">{pathway.name}</h3>
+            <p className="text-sm text-muted-foreground mb-2">{pathway.rationale}</p>
+            <p className="text-xs text-primary font-medium">{pathway.timeline}</p>
+          </button>
+        ))}
+      </div>
+
+      <div className="flex gap-4 mt-8">
+        <Button variant="outline" className="flex-1 bg-transparent" onClick={onPrevious}>
+          Anterior
+        </Button>
+        <Button
+          className="flex-1 bg-primary text-primary-foreground"
+          onClick={onNext}
+          disabled={selectedPathways.length === 0}
+        >
+          Siguiente
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function SelectionStep({
+  selectedPathways,
+  onAddCustomTrack,
+  onNext,
+  onPrevious,
+}: {
+  selectedPathways: string[]
+  onAddCustomTrack: (track: string) => void
+  onNext: () => void
+  onPrevious: () => void
+}) {
+  const [customTrack, setCustomTrack] = useState("")
+
+  return (
+    <div className="p-8">
+      <h2 className="text-2xl font-bold text-foreground mb-2">Personaliza Tu Plan</h2>
+      <p className="text-muted-foreground mb-6">Agrega otros caminos que te inspiraron (opcional)</p>
+
+      <div className="mb-6">
+        <h3 className="font-medium mb-3">Caminos seleccionados:</h3>
+        <div className="flex flex-wrap gap-2 mb-4">
+          {selectedPathways.map((pathway) => (
+            <span key={pathway} className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
+              {pathway}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-2">¿Hay otro camino que te inspire? (Opcional)</label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Ej: Emprendimiento, Ciencia de Datos..."
+            value={customTrack}
+            onChange={(e) => setCustomTrack(e.target.value)}
+            className="flex-1 px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (customTrack.trim()) {
+                onAddCustomTrack(customTrack)
+                setCustomTrack("")
+              }
+            }}
+            disabled={!customTrack.trim()}
+          >
+            Agregar
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex gap-4 mt-8">
+        <Button variant="outline" className="flex-1 bg-transparent" onClick={onPrevious}>
+          Anterior
+        </Button>
+        <Button className="flex-1 bg-primary text-primary-foreground" onClick={onNext} disabled={selectedPathways.length === 0}>
+          Continuar
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function SummaryStep({
+  data,
+  selectedPathways,
+  onComplete,
+  onPrevious,
+}: {
+  data: OnboardingData
+  selectedPathways: string[]
+  onComplete: () => void
+  onPrevious: () => void
+}) {
+  return (
+    <div className="p-8">
+      <div className="text-center mb-8">
+        <div className="text-6xl mb-4">🎯</div>
+        <h2 className="text-3xl font-bold text-foreground mb-2">¡Tu Ruta Está Lista!</h2>
+        <p className="text-muted-foreground">Estos son los caminos que elegiste para tu futuro</p>
+      </div>
+
+      <div className="mb-8 p-6 bg-primary/5 rounded-lg border-2 border-primary/20">
+        <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+          <span className="text-2xl">🚀</span>
+          Tus Caminos Seleccionados
+        </h3>
+        <div className="space-y-3">
+          {selectedPathways.map((pathway, index) => (
+            <div key={pathway} className="flex items-center gap-3 p-3 bg-background rounded-lg">
+              <div className="flex items-center justify-center w-8 h-8 bg-primary text-primary-foreground rounded-full font-bold text-sm">
+                {index + 1}
+              </div>
+              <span className="font-medium text-foreground">{pathway}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-6 p-4 bg-muted rounded-lg">
+        <h4 className="font-medium text-foreground mb-2">📋 Resumen de tu perfil:</h4>
+        <ul className="space-y-1 text-sm text-muted-foreground">
+          <li>• {data.schoolType === "colegio" ? "Colegio" : "Universidad"}: {data.schoolName}</li>
+          <li>• Año {data.currentYear}</li>
+          <li>• {selectedPathways.length} caminos seleccionados</li>
+        </ul>
+      </div>
+
+      <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+        <p className="text-sm text-blue-900 dark:text-blue-100">
+          💡 <strong>Próximos pasos:</strong> Vamos a crear un plan de acción personalizado para cada uno de tus caminos con oportunidades, recursos y recordatorios.
+        </p>
+      </div>
+
+      <div className="flex gap-4 mt-8">
+        <Button variant="outline" className="flex-1 bg-transparent" onClick={onPrevious}>
+          Anterior
+        </Button>
+        <Button className="flex-1 bg-primary text-primary-foreground text-lg py-6" onClick={onComplete}>
+          🎓 Comenzar Mi Ruta
+        </Button>
+      </div>
+    </div>
+  )
+}
