@@ -390,7 +390,7 @@ export default function Dashboard({ showOnboardingReminder, onResumeOnboarding }
         </div>
       )}
 
-      {/* Pathway Recommendations Cards */}
+      {/* Pathway Recommendations Cards - Por qué es apropiado para ti */}
       {actionPlan && (
         <div className="mb-12">
           <PathwayCards 
@@ -405,16 +405,9 @@ export default function Dashboard({ showOnboardingReminder, onResumeOnboarding }
         </div>
       )}
 
-      {/* Opportunities by Pathway */}
-      {actionPlan && (
-        <div className="mb-12">
-          <OpportunitiesByPathway />
-        </div>
-      )}
-
       {/* Action Plan Section */}
       {actionPlan && (
-        <div className="mb-8">
+        <div className="mb-12">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold">Tu Plan de Acción Detallado</h2>
             <Button variant={showPlan ? "default" : "outline"} onClick={() => setShowPlan(!showPlan)}>
@@ -422,6 +415,21 @@ export default function Dashboard({ showOnboardingReminder, onResumeOnboarding }
             </Button>
           </div>
           {showPlan && <ActionPlanDisplay plan={actionPlan} />}
+        </div>
+      )}
+
+      {/* Opportunities by Pathway */}
+      {actionPlan && selectedPathways.length > 0 && (
+        <div className="mb-12">
+          <OpportunitiesByPathway 
+            selectedPathways={selectedPathways}
+            userResponses={onboardingData ? {
+              openResponses: onboardingData.openResponses,
+              preferenceResponses: onboardingData.preferenceResponses,
+              schoolType: onboardingData.schoolType,
+              currentYear: onboardingData.currentYear,
+            } : undefined}
+          />
         </div>
       )}
 

@@ -1,138 +1,264 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
+import { Sparkles, ExternalLink } from "lucide-react"
 
-const OPPORTUNITIES_BY_PATHWAY = {
-  "Desarrollo Tecnológico": {
-    internships: [
-      { id: 1, title: "Frontend Developer Internship", company: "Tech Startup", duration: "3 months" },
-      { id: 2, title: "Full Stack Internship", company: "TechCorp", duration: "6 months" },
-    ],
-    courses: [
-      { id: 1, title: "React Advanced", provider: "Udemy", duration: "8 weeks" },
-      { id: 2, title: "Node.js Backend", provider: "Coursera", duration: "6 weeks" },
-    ],
-    studyPlans: [
-      { id: 1, title: "Full Stack Developer", duration: "6 months" },
-      { id: 2, title: "Web Development Roadmap", duration: "3 months" },
-    ],
-    summerCamps: [
-      { id: 1, title: "Tech Summit 2025", dates: "July-August", location: "Online" },
-      { id: 2, title: "Code Bootcamp", dates: "June-July", location: "Mexico City" },
-    ],
-  },
-  Emprendimiento: {
-    internships: [{ id: 1, title: "Startup Operations", company: "LaunchPad", duration: "3 months" }],
-    courses: [
-      { id: 1, title: "Lean Startup Methodology", provider: "Coursera", duration: "4 weeks" },
-      { id: 2, title: "Business Model Canvas", provider: "Udemy", duration: "3 weeks" },
-    ],
-    studyPlans: [{ id: 1, title: "Entrepreneurship Essentials", duration: "3 months" }],
-    summerCamps: [
-      { id: 1, title: "Startup Bootcamp LATAM", dates: "July-August", location: "Colombia" },
-      { id: 2, title: "Innovation Challenge", dates: "June-July", location: "Remote" },
-    ],
-  },
-  "Gestión & Negocios": {
-    internships: [
-      { id: 1, title: "Business Analyst", company: "Consulting Firm", duration: "6 months" },
-      { id: 2, title: "Project Management", company: "Fortune 500", duration: "3 months" },
-    ],
-    courses: [
-      { id: 1, title: "Project Management Professional", provider: "LinkedIn Learning", duration: "8 weeks" },
-      { id: 2, title: "Business Analytics", provider: "DataCamp", duration: "6 weeks" },
-    ],
-    studyPlans: [
-      { id: 1, title: "MBA Preparation", duration: "6 months" },
-      { id: 2, title: "Leadership Development", duration: "3 months" },
-    ],
-    summerCamps: [{ id: 1, title: "Leadership Summit", dates: "July-August", location: "Buenos Aires" }],
-  },
+interface OpportunitiesByPathwayProps {
+  selectedPathways: string[]
+  userResponses?: {
+    openResponses?: Record<string, string>
+    preferenceResponses?: Record<string, string>
+    schoolType?: string
+    currentYear?: number
+  }
 }
 
-export default function OpportunitiesByPathway() {
-  const pathwayNames = Object.keys(OPPORTUNITIES_BY_PATHWAY)
+interface Opportunity {
+  id: string
+  title: string
+  description: string
+  provider?: string
+  company?: string
+  duration?: string
+  location?: string
+  dates?: string
+  level?: string
+  type: "internship" | "course" | "study_plan" | "summer_camp"
+}
+
+export default function OpportunitiesByPathway({ selectedPathways, userResponses }: OpportunitiesByPathwayProps) {
+  const [opportunities, setOpportunities] = useState<Record<string, Opportunity[]>>({})
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (selectedPathways.length === 0) return
+
+    const fetchOpportunities = async () => {
+      setIsLoading(true)
+      setError(null)
+      try {
+        const response = await fetch("/api/get-opportunities", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pathways: selectedPathways,
+            userResponses,
+          }),
+        })
+
+        const data = await response.json()
+        if (data.success) {
+          // Group opportunities by pathway
+          const grouped: Record<string, Opportunity[]> = {}
+          selectedPathways.forEach((pathway) => {
+            grouped[pathway] = data.opportunities.filter((opp: Opportunity) =>
+              data.opportunities.some((o: Opportunity) => o.id === opp.id)
+            )
+          })
+          setOpportunities(grouped)
+        } else {
+          setError(data.error || "Error al cargar oportunidades")
+        }
+      } catch (err) {
+        console.error("Error fetching opportunities:", err)
+        setError("Error al cargar oportunidades")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchOpportunities()
+  }, [selectedPathways, userResponses])
+
+  if (selectedPathways.length === 0) {
+    return null
+  }
 
   return (
-    <div className="mb-8">
-      <h2 className="text-2xl font-bold mb-6">Oportunidades por Camino</h2>
+    <Card className="p-6 bg-gradient-to-br from-background via-primary/5 to-background border-2 border-primary/20">
+      <div className="flex items-center gap-3 mb-6">
+        <Sparkles className="h-6 w-6 text-primary" />
+        <div>
+          <h2 className="text-2xl font-bold text-foreground">Oportunidades Personalizadas</h2>
+          <p className="text-sm text-muted-foreground">
+            Basadas en los caminos recomendados para tu perfil específico
+          </p>
+        </div>
+      </div>
 
-      <Tabs defaultValue={pathwayNames[0]} className="w-full">
-        <TabsList className="grid w-full gap-2" style={{ gridTemplateColumns: `repeat(${pathwayNames.length}, 1fr)` }}>
-          {pathwayNames.map((pathway) => (
-            <TabsTrigger key={pathway} value={pathway} className="text-xs sm:text-sm">
-              {pathway}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+      {isLoading && (
+        <div className="text-center py-8">
+          <p className="text-muted-foreground">Cargando oportunidades personalizadas...</p>
+        </div>
+      )}
 
-        {pathwayNames.map((pathwayName) => {
-          const opportunities = OPPORTUNITIES_BY_PATHWAY[pathwayName as keyof typeof OPPORTUNITIES_BY_PATHWAY]
+      {error && (
+        <div className="text-center py-8">
+          <p className="text-destructive">{error}</p>
+        </div>
+      )}
 
-          return (
-            <TabsContent key={pathwayName} value={pathwayName} className="space-y-6">
-              {/* Internships */}
-              <div>
-                <h3 className="text-lg font-semibold mb-3">Prácticas Profesionales</h3>
-                <div className="grid md:grid-cols-2 gap-3">
-                  {opportunities.internships.map((item) => (
-                    <Card key={item.id} className="p-4">
-                      <h4 className="font-semibold text-sm">{item.title}</h4>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {item.company} • {item.duration}
-                      </p>
-                    </Card>
-                  ))}
-                </div>
-              </div>
+      {!isLoading && !error && (
+        <Tabs defaultValue={selectedPathways[0]} className="w-full">
+          <TabsList className="grid w-full gap-2 mb-6" style={{ gridTemplateColumns: `repeat(${selectedPathways.length}, 1fr)` }}>
+            {selectedPathways.map((pathway) => (
+              <TabsTrigger key={pathway} value={pathway} className="text-xs sm:text-sm">
+                {pathway}
+              </TabsTrigger>
+            ))}
+          </TabsList>
 
-              {/* Courses */}
-              <div>
-                <h3 className="text-lg font-semibold mb-3">Cursos</h3>
-                <div className="grid md:grid-cols-2 gap-3">
-                  {opportunities.courses.map((item) => (
-                    <Card key={item.id} className="p-4">
-                      <h4 className="font-semibold text-sm">{item.title}</h4>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {item.provider} • {item.duration}
-                      </p>
-                    </Card>
-                  ))}
-                </div>
-              </div>
+          {selectedPathways.map((pathway) => {
+            const pathwayOps = opportunities[pathway] || []
+            const internships = pathwayOps.filter((opp) => opp.type === "internship")
+            const courses = pathwayOps.filter((opp) => opp.type === "course")
+            const studyPlans = pathwayOps.filter((opp) => opp.type === "study_plan")
+            const summerCamps = pathwayOps.filter((opp) => opp.type === "summer_camp")
 
-              {/* Study Plans */}
-              <div>
-                <h3 className="text-lg font-semibold mb-3">Planes de Estudio</h3>
-                <div className="grid md:grid-cols-2 gap-3">
-                  {opportunities.studyPlans.map((item) => (
-                    <Card key={item.id} className="p-4">
-                      <h4 className="font-semibold text-sm">{item.title}</h4>
-                      <p className="text-xs text-muted-foreground mt-1">{item.duration}</p>
-                    </Card>
-                  ))}
-                </div>
-              </div>
+            return (
+              <TabsContent key={pathway} value={pathway} className="space-y-6 mt-0">
+                {/* Internships */}
+                {internships.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                      Prácticas Profesionales
+                      <Badge variant="secondary" className="text-xs">
+                        {internships.length}
+                      </Badge>
+                    </h3>
+                    <div className="grid md:grid-cols-2 gap-3">
+                      {internships.map((item) => (
+                        <Card
+                          key={item.id}
+                          className="p-4 hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-primary"
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <h4 className="font-semibold text-sm">{item.title}</h4>
+                            <ExternalLink className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          </div>
+                          <p className="text-xs text-muted-foreground mb-2">{item.description}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {item.company} • {item.duration}
+                            {item.location && ` • ${item.location}`}
+                          </p>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-              {/* Summer Camps */}
-              <div>
-                <h3 className="text-lg font-semibold mb-3">Campamentos de Verano</h3>
-                <div className="grid md:grid-cols-2 gap-3">
-                  {opportunities.summerCamps.map((item) => (
-                    <Card key={item.id} className="p-4">
-                      <h4 className="font-semibold text-sm">{item.title}</h4>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {item.dates} • {item.location}
-                      </p>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            </TabsContent>
-          )
-        })}
-      </Tabs>
-    </div>
+                {/* Courses */}
+                {courses.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                      Cursos Recomendados
+                      <Badge variant="secondary" className="text-xs">
+                        {courses.length}
+                      </Badge>
+                    </h3>
+                    <div className="grid md:grid-cols-2 gap-3">
+                      {courses.map((item) => (
+                        <Card
+                          key={item.id}
+                          className="p-4 hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-blue-500"
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <h4 className="font-semibold text-sm">{item.title}</h4>
+                            <ExternalLink className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          </div>
+                          <p className="text-xs text-muted-foreground mb-2">{item.description}</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-xs text-muted-foreground">
+                              {item.provider} • {item.duration}
+                            </p>
+                            {item.level && (
+                              <Badge variant="outline" className="text-[10px] px-1 py-0">
+                                {item.level}
+                              </Badge>
+                            )}
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Study Plans */}
+                {studyPlans.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                      Planes de Estudio
+                      <Badge variant="secondary" className="text-xs">
+                        {studyPlans.length}
+                      </Badge>
+                    </h3>
+                    <div className="grid md:grid-cols-2 gap-3">
+                      {studyPlans.map((item) => (
+                        <Card
+                          key={item.id}
+                          className="p-4 hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-green-500"
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <h4 className="font-semibold text-sm">{item.title}</h4>
+                            <ExternalLink className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          </div>
+                          <p className="text-xs text-muted-foreground mb-2">{item.description}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {item.provider} • {item.duration}
+                          </p>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Summer Camps */}
+                {summerCamps.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                      Campamentos de Verano
+                      <Badge variant="secondary" className="text-xs">
+                        {summerCamps.length}
+                      </Badge>
+                    </h3>
+                    <div className="grid md:grid-cols-2 gap-3">
+                      {summerCamps.map((item) => (
+                        <Card
+                          key={item.id}
+                          className="p-4 hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-yellow-500"
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <h4 className="font-semibold text-sm">{item.title}</h4>
+                            <ExternalLink className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          </div>
+                          <p className="text-xs text-muted-foreground mb-2">{item.description}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {item.provider} • {item.dates}
+                            {item.location && ` • ${item.location}`}
+                          </p>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty state for pathway with no opportunities */}
+                {pathwayOps.length === 0 && (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">
+                      No hay oportunidades disponibles para este camino aún.
+                    </p>
+                  </div>
+                )}
+              </TabsContent>
+            )
+          })}
+        </Tabs>
+      )}
+    </Card>
   )
 }

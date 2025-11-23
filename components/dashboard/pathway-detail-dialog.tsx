@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Sparkles, Plus, Lightbulb, ClipboardList, Target } from "lucide-react"
+import { Loader2, Sparkles, Plus, Lightbulb, Target } from "lucide-react"
 
 interface PathwayDetailDialogProps {
   pathway: {
@@ -85,6 +85,24 @@ export default function PathwayDetailDialog({
         </DialogHeader>
 
         <div className="space-y-6 mt-4">
+          {/* Why this is appropriate - Moved to top */}
+          {userResponses && (
+            <Card className="p-6 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
+              <div className="flex items-center gap-2 mb-4">
+                <Lightbulb className="h-5 w-5 text-primary" />
+                <h3 className="text-xl font-bold">¿Por qué este plan es apropiado para ti?</h3>
+              </div>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Este plan está diseñado específicamente para tu perfil, tomando en cuenta tu visión de futuro, 
+                tus preferencias de trabajo y aprendizaje, y tus objetivos educativos. 
+                Cada paso está pensado para ayudarte a desarrollar las habilidades que mencionaste 
+                mientras mantienes el estilo de trabajo que prefieres. Las actividades están adaptadas 
+                a tu nivel actual {userResponses.schoolType === "universidad" ? "universitario" : "escolar"} 
+                y te preparan para las oportunidades que buscas.
+              </p>
+            </Card>
+          )}
+
           {/* User Suggestions Section */}
           <div>
             <div className="flex items-center gap-2 mb-4">
@@ -131,105 +149,6 @@ export default function PathwayDetailDialog({
               )}
             </div>
           </div>
-
-          {/* Action Plan Section */}
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <ClipboardList className="h-5 w-5 text-primary" />
-              <h3 className="text-xl font-bold">Tu Plan de Acción</h3>
-            </div>
-            <Card className="p-6 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
-              <div className="space-y-4">
-                {/* Why this is appropriate paragraph */}
-                {userResponses && (
-                  <div className="mb-4 p-4 bg-background/50 rounded-lg border border-primary/10">
-                    <h4 className="font-semibold text-sm mb-2 text-primary">¿Por qué este plan es apropiado para ti?</h4>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      Este plan está diseñado específicamente para tu perfil, tomando en cuenta tu visión de futuro, 
-                      tus preferencias de trabajo y aprendizaje, y tus objetivos educativos. 
-                      Cada paso está pensado para ayudarte a desarrollar las habilidades que mencionaste 
-                      mientras mantienes el estilo de trabajo que prefieres. Las actividades están adaptadas 
-                      a tu nivel actual {userResponses.schoolType === "universidad" ? "universitario" : "escolar"} 
-                      y te preparan para las oportunidades que buscas.
-                    </p>
-                  </div>
-                )}
-                
-                {analysisResult ? (
-                  <div className="space-y-3">
-                    <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">
-                        1
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-sm mb-1">Comienza con tus ideas personales</h4>
-                        <p className="text-xs text-muted-foreground">
-                          Has compartido ideas específicas - empieza por explorarlas
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">
-                        2
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-sm mb-1">Dedica tiempo cada día</h4>
-                        <p className="text-xs text-muted-foreground">
-                          Establece un horario consistente para trabajar en tus objetivos
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">
-                        3
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-sm mb-1">Conecta con la comunidad</h4>
-                        <p className="text-xs text-muted-foreground">
-                          Busca grupos, mentores o comunidades relacionadas con este camino
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">
-                        4
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-sm mb-1">Evalúa tu progreso</h4>
-                        <p className="text-xs text-muted-foreground">
-                          Revisa semanalmente qué has logrado y ajusta tu plan
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-sm text-muted-foreground mb-3">
-                      Tu plan de acción se generará cuando agregues tus propias ideas y las analices arriba
-                    </p>
-                  </div>
-                )}
-              </div>
-            </Card>
-          </div>
-
-          {/* Pathway Info */}
-          <Card className="p-5 bg-muted/50">
-            <h4 className="font-semibold mb-3">Información del camino</h4>
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center gap-2">
-                <Target className="h-4 w-4 text-primary" />
-                <span>Duración estimada: {pathway.duration}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Target className="h-4 w-4 text-primary" />
-                <span>Personalizado según tu perfil y respuestas</span>
-              </div>
-            </div>
-          </Card>
         </div>
       </DialogContent>
     </Dialog>
