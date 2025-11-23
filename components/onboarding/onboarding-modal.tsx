@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { analyzeStudentResponses } from "@/lib/llm-client"
-import { getSupabaseBrowserClient } from "@/lib/supabase-browser"
 import OpenEnded from "./open-ended"
 import MultipleChoice from "./multiple-choice"
 import {
@@ -68,24 +67,23 @@ export default function OnboardingModal({ onComplete, onCancel }: OnboardingModa
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [isSavingProfile, setIsSavingProfile] = useState(false)
 
-  const supabase = getSupabaseBrowserClient()
-
-  // Load ONLY the current user's email from Supabase (not previous user's data)
+  // Load saved data from localStorage if exists
   useEffect(() => {
-    const loadCurrentUser = async () => {
-      if (supabase) {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user?.email) {
-          setData(prev => ({
-            ...prev,
-            email: user.email || "",
-            name: user.user_metadata?.name || "",
-          }))
-        }
+    const savedData = localStorage.getItem("onboardingData")
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData)
+        setData({
+          ...defaultData,
+          ...parsed,
+          email: parsed.email || "",
+          name: parsed.name || "",
+        })
+      } catch (error) {
+        console.error("Error loading onboarding data:", error)
       }
     }
-    loadCurrentUser()
-  }, [supabase])
+  }, [])
 
   const handleNext = async () => {
     const steps: OnboardingStep[] = ["schoolInfo", "knowledge", "preferences", "grades", "pathways", "selection", "summary"]
@@ -94,14 +92,6 @@ export default function OnboardingModal({ onComplete, onCancel }: OnboardingModa
     if (currentStep === "grades" && currentIndex < steps.length - 1) {
       setIsAnalyzing(true)
       try {
-        // Validate session before API call
-        if (supabase) {
-          const { data: { session } } = await supabase.auth.getSession()
-          if (!session) {
-            throw new Error("Tu sesión ha expirado. Por favor, inicia sesión nuevamente.")
-          }
-        }
-
         const pathways = await analyzeStudentResponses({
           name: data.name,
           schoolType: data.schoolType,
@@ -146,53 +136,16 @@ export default function OnboardingModal({ onComplete, onCancel }: OnboardingModa
   const handleComplete = async () => {
     setIsSavingProfile(true)
     try {
-      const motivationSummary = [data.openResponses.futureVision, data.openResponses.dailyFeeling]
-        .map((value) => value?.trim())
-        .filter(Boolean)
-        .join(" | ")
-      const goalsSummary = [
-        data.openResponses.problemEnjoyment,
-        data.openResponses.skillFocus,
-        data.openResponses.oneWeekJob,
-      ]
-        .map((value) => value?.trim())
-        .filter(Boolean)
-        .join(" | ")
-
       const completeData = {
         ...data,
         recommendedPathways,
         completedAt: new Date().toISOString(),
         permanent: true, // Mark as permanent - cannot be retaken
       }
-      // Note: Data is now saved to Supabase below
-      // localStorage is no longer used to prevent cross-user data contamination
-      // Only save to Supabase for proper user isolation
-
-      if (supabase && completeData.email) {
-        const { error } = await supabase.from("onboarding").upsert({
-          email: completeData.email,
-          name: completeData.name,
-          phone_number: completeData.phoneNumber,
-          school_type: completeData.schoolType,
-          school_name: completeData.schoolName,
-          current_year: completeData.currentYear,
-          motivation: motivationSummary,
-          goals: goalsSummary,
-          grades: completeData.grades,
-          selected_pathways: completeData.selectedPathways,
-          custom_tracks: completeData.customTracks,
-          recommended_pathways: completeData.recommendedPathways,
-          completed_at: completeData.completedAt,
-          permanent: completeData.permanent,
-          profile_payload: completeData,
-          updated_at: new Date().toISOString(),
-        })
-
-        if (error) {
-          console.error("[Onboarding] Error saving on Supabase", error)
-        }
-      }
+      
+      // Save to localStorage
+      localStorage.setItem("onboardingData", JSON.stringify(completeData))
+      localStorage.setItem("onboardingComplete", "true")
       
       console.warn("[Onboarding] Profile saved permanently:", {
         name: data.name,

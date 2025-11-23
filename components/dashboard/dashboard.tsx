@@ -11,8 +11,6 @@ import ActionPlanGenerator from "./action-plan-generator"
 import PathwayCards from "./pathway-cards"
 import OpportunitiesByPathway from "./opportunities-by-pathway"
 import RemindersSection from "./reminders-section"
-import { logoutUser } from "@/lib/auth-client"
-import { getSupabaseBrowserClient } from "@/lib/supabase-browser"
 import {
   createEmptyOpenResponses,
   createEmptyPreferenceResponses,
@@ -111,12 +109,11 @@ interface ActionPlan {
 }
 
 interface DashboardProps {
-  onLogout: () => void
   showOnboardingReminder?: boolean
   onResumeOnboarding?: () => void
 }
 
-export default function Dashboard({ onLogout, showOnboardingReminder, onResumeOnboarding }: DashboardProps) {
+export default function Dashboard({ showOnboardingReminder, onResumeOnboarding }: DashboardProps) {
   const [actionPlan, setActionPlan] = useState<ActionPlan | null>(null)
   const [showPlan, setShowPlan] = useState(false)
   const [userInfo, setUserInfo] = useState<{ name: string; schoolName: string; schoolType: string; completedAt?: string } | null>(null)
@@ -125,14 +122,36 @@ export default function Dashboard({ onLogout, showOnboardingReminder, onResumeOn
   const [onboardingData, setOnboardingData] = useState<SavedOnboardingData | null>(null)
   const [settingsPreferences, setSettingsPreferences] = useState<DashboardSettings>(defaultDashboardSettings)
   const [settingsLoaded, setSettingsLoaded] = useState(false)
-  const [userEmail, setUserEmail] = useState<string | null>(null)
-
-  const supabase = getSupabaseBrowserClient()
 
   useEffect(() => {
-    // Load settings from localStorage (user-preference, not user-specific data)
-    const savedSettings = localStorage.getItem("dashboardSettings")
+    // Load onboarding data from localStorage
+    const savedOnboardingData = localStorage.getItem("onboardingData")
+    if (savedOnboardingData) {
+      try {
+        const parsedData = JSON.parse(savedOnboardingData)
+        const normalizedData = withResponseDefaults(parsedData)
+        if (normalizedData) {
+          setOnboardingData(normalizedData)
+          setUserInfo({
+            name: normalizedData.name ?? "",
+            schoolName: normalizedData.schoolName ?? "",
+            schoolType: normalizedData.schoolType === "universidad" ? "Universidad" : "Colegio",
+            completedAt: normalizedData.completedAt,
+          })
+          if (normalizedData.selectedPathways?.length) {
+            setSelectedPathways(normalizedData.selectedPathways)
+          }
+          if (normalizedData.phoneNumber) {
+            setPhoneNumber(normalizedData.phoneNumber)
+          }
+        }
+      } catch (error) {
+        console.error("Error parsing saved onboarding data", error)
+      }
+    }
 
+    // Load settings from localStorage
+    const savedSettings = localStorage.getItem("dashboardSettings")
     if (savedSettings) {
       try {
         const parsedSettings = JSON.parse(savedSettings)
@@ -146,146 +165,12 @@ export default function Dashboard({ onLogout, showOnboardingReminder, onResumeOn
     }
 
     setSettingsLoaded(true)
-    
-    // Note: User-specific data (onboarding, action plans) is now loaded exclusively 
-    // from Supabase in the syncRemoteState effect below to ensure data isolation per user
   }, [])
 
   useEffect(() => {
     if (!settingsLoaded) return
     localStorage.setItem("dashboardSettings", JSON.stringify(settingsPreferences))
   }, [settingsLoaded, settingsPreferences])
-
-  useEffect(() => {
-    if (!supabase || !userEmail) return
-    let isMounted = true
-
-    const syncRemoteState = async () => {
-      const [{ data: remoteOnboarding, error: onboardingError }, { data: remoteSettings, error: settingsError }] = await Promise.all([
-        supabase
-          .from("onboarding")
-          .select("*")
-          .eq("email", userEmail)
-          .maybeSingle(),
-        supabase
-          .from("user_settings")
-          .select("whatsapp_reminders, weekly_summary_emails, share_progress_with_mentor")
-          .eq("email", userEmail)
-          .maybeSingle(),
-      ])
-
-      if (onboardingError && onboardingError.code !== "PGRST116") {
-        console.error("Error fetching onboarding from Supabase", onboardingError)
-      }
-
-      if (remoteOnboarding && isMounted) {
-        const payload: SavedOnboardingData =
-          remoteOnboarding.profile_payload ??
-          {
-            name: remoteOnboarding.name ?? undefined,
-            email: remoteOnboarding.email ?? undefined,
-            phoneNumber: remoteOnboarding.phone_number ?? undefined,
-            schoolType: remoteOnboarding.school_type ?? undefined,
-            schoolName: remoteOnboarding.school_name ?? undefined,
-            currentYear: remoteOnboarding.current_year ?? undefined,
-            motivation: remoteOnboarding.motivation ?? undefined,
-            goals: remoteOnboarding.goals ?? undefined,
-            grades: remoteOnboarding.grades ?? [],
-            selectedPathways: remoteOnboarding.selected_pathways ?? [],
-            customTracks: remoteOnboarding.custom_tracks ?? [],
-            recommendedPathways: remoteOnboarding.recommended_pathways ?? [],
-            completedAt: remoteOnboarding.completed_at ?? undefined,
-            permanent: remoteOnboarding.permanent ?? undefined,
-          }
-
-        const normalizedPayload = withResponseDefaults(payload)
-
-        if (normalizedPayload) {
-          setOnboardingData(normalizedPayload)
-          setUserInfo({
-            name: normalizedPayload.name ?? "",
-            schoolName: normalizedPayload.schoolName ?? "",
-            schoolType: normalizedPayload.schoolType === "universidad" ? "Universidad" : "Colegio",
-            completedAt: normalizedPayload.completedAt,
-          })
-          if (normalizedPayload.selectedPathways?.length) {
-            setSelectedPathways(normalizedPayload.selectedPathways)
-          }
-          if (normalizedPayload.phoneNumber) {
-            setPhoneNumber(normalizedPayload.phoneNumber)
-            localStorage.setItem("whatsappPhoneNumber", normalizedPayload.phoneNumber)
-          }
-          localStorage.setItem("onboardingData", JSON.stringify(normalizedPayload))
-          localStorage.setItem("onboardingComplete", "true")
-        }
-      }
-
-      if (settingsError && settingsError.code !== "PGRST116") {
-        console.error("Error fetching dashboard settings from Supabase", settingsError)
-      }
-
-      if (remoteSettings && isMounted) {
-        const normalized: DashboardSettings = {
-          whatsappReminders: remoteSettings.whatsapp_reminders ?? defaultDashboardSettings.whatsappReminders,
-          weeklySummaryEmails: remoteSettings.weekly_summary_emails ?? defaultDashboardSettings.weeklySummaryEmails,
-          shareProgressWithMentor: remoteSettings.share_progress_with_mentor ?? defaultDashboardSettings.shareProgressWithMentor,
-        }
-        setSettingsPreferences(normalized)
-        localStorage.setItem("dashboardSettings", JSON.stringify(normalized))
-      } else if (!remoteSettings && userEmail) {
-        const { error: insertError } = await supabase.from("user_settings").insert({
-          email: userEmail,
-          whatsapp_reminders: defaultDashboardSettings.whatsappReminders,
-          weekly_summary_emails: defaultDashboardSettings.weeklySummaryEmails,
-          share_progress_with_mentor: defaultDashboardSettings.shareProgressWithMentor,
-        })
-        if (insertError) {
-          console.error("Error creating default dashboard settings", insertError)
-        }
-      }
-    }
-
-    void syncRemoteState()
-
-    return () => {
-      isMounted = false
-    }
-  }, [supabase, userEmail])
-
-  // Placeholder for future settings persistence
-  // const persistSettingsToSupabase = useCallback(
-  //   async (nextSettings: DashboardSettings) => {
-  //     if (!supabase || !userEmail) return
-  //     const { error } = await supabase.from("user_settings").upsert({
-  //       email: userEmail,
-  //       whatsapp_reminders: nextSettings.whatsappReminders,
-  //       weekly_summary_emails: nextSettings.weeklySummaryEmails,
-  //       share_progress_with_mentor: nextSettings.shareProgressWithMentor,
-  //       updated_at: new Date().toISOString(),
-  //     })
-  //     if (error) {
-  //       console.error("Error updating settings in Supabase", error)
-  //     }
-  //   },
-  //   [supabase, userEmail],
-  // )
-
-  const handleLogout = () => {
-    logoutUser()
-    onLogout()
-  }
-
-  // Placeholder for future settings changes
-  // const handleSettingChange = (key: keyof DashboardSettings, value: boolean) => {
-  //   setSettingsPreferences((prev) => {
-  //     const updated = {
-  //       ...prev,
-  //       [key]: value,
-  //     }
-  //     void persistSettingsToSupabase(updated)
-  //     return updated
-  //   })
-  // }
 
   const dialogPhoneNumber = onboardingData?.phoneNumber ?? phoneNumber ?? "—"
   const formattedSchoolType =
@@ -300,9 +185,10 @@ export default function Dashboard({ onLogout, showOnboardingReminder, onResumeOn
       : formattedSchoolType === "Colegio"
         ? "Colegio"
         : "Institución"
+
   return (
     <div className="max-w-7xl mx-auto p-4">
-      {/* Header with Logout */}
+      {/* Header */}
       <div className="flex justify-between items-start mb-8">
         <div>
           <h1 className="text-4xl font-bold text-foreground mb-2">¡Bienvenido, {userInfo?.name}!</h1>
@@ -320,9 +206,6 @@ export default function Dashboard({ onLogout, showOnboardingReminder, onResumeOn
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleLogout}>
-            Cerrar Sesión
-          </Button>
           <Dialog>
             <DialogTrigger asChild>
               <Button className="flex items-center gap-2" variant="default">
@@ -363,7 +246,7 @@ export default function Dashboard({ onLogout, showOnboardingReminder, onResumeOn
                       </div>
                       <div className="flex justify-between gap-2">
                         <span className="text-muted-foreground">Correo</span>
-                        <span className="font-medium text-right break-all">{onboardingData.email ?? userEmail ?? "—"}</span>
+                        <span className="font-medium text-right break-all">{onboardingData.email ?? "—"}</span>
                       </div>
                       <div className="flex justify-between gap-2">
                         <span className="text-muted-foreground">WhatsApp</span>

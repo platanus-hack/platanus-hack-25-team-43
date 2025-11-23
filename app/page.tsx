@@ -3,15 +3,11 @@
  * @description Main application entry point and routing logic
  * 
  * This component manages the application's primary flow:
- * 1. Authentication check (login/register)
- * 2. Onboarding modal (if not completed)
- * 3. Dashboard (after onboarding)
+ * 1. Onboarding modal (if not completed)
+ * 2. Dashboard (after onboarding)
  * 
- * Uses localStorage to persist:
- * - userToken (authentication)
- * - onboardingComplete (onboarding status)
+ * Uses localStorage to persist onboarding status.
  * 
- * @see components/auth/auth-page.tsx - Authentication UI
  * @see components/onboarding/onboarding-modal.tsx - Onboarding flow
  * @see components/dashboard/dashboard.tsx - Main dashboard
  */
@@ -21,12 +17,8 @@
 import { useState, useEffect } from "react"
 import OnboardingModal from "@/components/onboarding/onboarding-modal"
 import Dashboard from "@/components/dashboard/dashboard"
-import AuthPage from "@/components/auth/auth-page"
-import { getCurrentUser, onAuthStateChange } from "@/lib/auth-client"
-import { checkClientEnvironment } from "@/lib/env-validation"
 
 export default function Home() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isOnboarded, setIsOnboarded] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
@@ -35,63 +27,18 @@ export default function Home() {
 
   useEffect(() => {
     setMounted(true)
-    // Validate environment variables on startup
-    checkClientEnvironment()
   }, [])
 
   useEffect(() => {
     if (!mounted) return
 
-    // Check authentication status with Supabase
-    const checkAuth = async () => {
-      const user = await getCurrentUser()
-      
-      if (!user) {
-        setIsAuthenticated(false)
-        setIsOnboarded(false)
-        setHasDismissedOnboarding(false)
-        setIsLoading(false)
-        return
-      }
+    // Check onboarding status from localStorage
+    const onboardingComplete = localStorage.getItem("onboardingComplete") === "true"
+    const onboardingDismissed = localStorage.getItem("onboardingDismissed") === "true"
 
-      // Check onboarding status from Supabase (user-specific)
-      const supabase = await import("@/lib/supabase-browser").then(m => m.getSupabaseBrowserClient())
-      if (supabase) {
-        const { data: onboardingData } = await supabase
-          .from("onboarding")
-          .select("completed_at, permanent")
-          .eq("email", user.email)
-          .maybeSingle()
-
-        const hasCompletedOnboarding = !!onboardingData?.completed_at
-        const onboardingDismissed = localStorage.getItem("onboardingDismissed") === "true"
-
-        setIsAuthenticated(true)
-        setIsOnboarded(hasCompletedOnboarding)
-        setHasDismissedOnboarding(onboardingDismissed)
-      } else {
-        setIsAuthenticated(true)
-        setIsOnboarded(false)
-        setHasDismissedOnboarding(false)
-      }
-      
-      setIsLoading(false)
-    }
-
-    checkAuth()
-
-    // Subscribe to auth state changes
-    const { data: { subscription } } = onAuthStateChange((event, session) => {
-      setIsAuthenticated(!!session)
-      if (!session) {
-        setIsOnboarded(false)
-        setHasDismissedOnboarding(false)
-      }
-    })
-
-    return () => {
-      subscription.unsubscribe()
-    }
+    setIsOnboarded(onboardingComplete)
+    setHasDismissedOnboarding(onboardingDismissed)
+    setIsLoading(false)
   }, [mounted])
 
   const handleOnboardingComplete = () => {
@@ -129,23 +76,13 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
-      {!isAuthenticated ? (
-        <AuthPage onAuthSuccess={() => setIsAuthenticated(true)} />
-      ) : (
-        <>
-          <Dashboard
-            key={dashboardSession}
-            onLogout={() => {
-              setIsAuthenticated(false)
-              setIsOnboarded(false)
-            }}
-            showOnboardingReminder={isAuthenticated && !isOnboarded && hasDismissedOnboarding}
-            onResumeOnboarding={handleResumeOnboarding}
-          />
-          {isAuthenticated && !isOnboarded && !hasDismissedOnboarding && (
-            <OnboardingModal onComplete={handleOnboardingComplete} onCancel={handleOnboardingCancel} />
-          )}
-        </>
+      <Dashboard
+        key={dashboardSession}
+        showOnboardingReminder={!isOnboarded && hasDismissedOnboarding}
+        onResumeOnboarding={handleResumeOnboarding}
+      />
+      {!isOnboarded && !hasDismissedOnboarding && (
+        <OnboardingModal onComplete={handleOnboardingComplete} onCancel={handleOnboardingCancel} />
       )}
     </main>
   )

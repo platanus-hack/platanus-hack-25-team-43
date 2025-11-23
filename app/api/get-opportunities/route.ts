@@ -1,13 +1,5 @@
-import { requireAuth } from "@/lib/auth-middleware"
-
 export async function POST(request: Request) {
   try {
-    // Authenticate user
-    const auth = await requireAuth(request)
-    if (!auth.authorized || !auth.user) {
-      return auth.response
-    }
-
     const body = await request.json()
     const { pathways } = body
 

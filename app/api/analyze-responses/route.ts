@@ -83,16 +83,9 @@
 import { anthropic } from "@ai-sdk/anthropic"
 import { generateText } from "ai"
 import { OPEN_ENDED_QUESTIONS, PREFERENCE_QUESTIONS } from "@/lib/onboarding-questions"
-import { requireAuth } from "@/lib/auth-middleware"
 
 export async function POST(request: Request) {
   try {
-    // Authenticate user
-    const auth = await requireAuth(request)
-    if (!auth.authorized || !auth.user) {
-      return auth.response
-    }
-
     const body = await request.json()
     const { name, schoolType, schoolName, currentYear, grades } = body
     const openResponses: Record<string, string> = body.openResponses ?? {}
