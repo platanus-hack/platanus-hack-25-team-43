@@ -10,8 +10,8 @@ import ActionPlanDisplay from "./action-plan-display"
 import ActionPlanGenerator from "./action-plan-generator"
 import PathwayCards from "./pathway-cards"
 import OpportunitiesByPathway from "./opportunities-by-pathway"
-import RemindersSection from "./reminders-section"
 import PathwayDetailDialog from "./pathway-detail-dialog"
+import DetailedActionPlan from "./detailed-action-plan"
 import {
   createEmptyOpenResponses,
   createEmptyPreferenceResponses,
@@ -47,6 +47,7 @@ type SavedOnboardingData = {
   name?: string
   email?: string
   phoneNumber?: string
+  location?: string
   schoolType?: "colegio" | "universidad"
   schoolName?: string
   currentYear?: number
@@ -125,6 +126,14 @@ export default function Dashboard({ showOnboardingReminder, onResumeOnboarding }
   const [settingsLoaded, setSettingsLoaded] = useState(false)
   const [pathwayDialogOpen, setPathwayDialogOpen] = useState(false)
   const [selectedPathwayForDialog, setSelectedPathwayForDialog] = useState<string | null>(null)
+  const [selectedOpportunities, setSelectedOpportunities] = useState<Array<{
+    id: string
+    title: string
+    description: string
+    type: string
+    provider?: string
+    company?: string
+  }>>([])
 
   useEffect(() => {
     // Load onboarding data from localStorage
@@ -377,11 +386,11 @@ export default function Dashboard({ showOnboardingReminder, onResumeOnboarding }
         <div className="mb-12">
           <ActionPlanGenerator 
             userData={{
-              name: onboardingData.name,
+              name: onboardingData.name ?? "",
               selectedPathways: selectedPathways,
-              schoolType: onboardingData.schoolType,
-              schoolName: onboardingData.schoolName,
-              currentYear: onboardingData.currentYear,
+              schoolType: onboardingData.schoolType ?? "colegio",
+              schoolName: onboardingData.schoolName ?? "",
+              currentYear: onboardingData.currentYear ?? 1,
               openResponses: onboardingData.openResponses ?? createEmptyOpenResponses(),
               preferenceResponses: onboardingData.preferenceResponses ?? createEmptyPreferenceResponses(),
             }}
@@ -423,6 +432,24 @@ export default function Dashboard({ showOnboardingReminder, onResumeOnboarding }
         <div className="mb-12">
           <OpportunitiesByPathway 
             selectedPathways={selectedPathways}
+            userLocation={onboardingData?.location}
+            userResponses={onboardingData ? {
+              openResponses: onboardingData.openResponses,
+              preferenceResponses: onboardingData.preferenceResponses,
+              schoolType: onboardingData.schoolType,
+              currentYear: onboardingData.currentYear,
+            } : undefined}
+            onOpportunitiesSelected={setSelectedOpportunities}
+          />
+        </div>
+      )}
+
+      {/* Detailed Action Plan based on selected opportunities */}
+      {actionPlan && selectedOpportunities.length > 0 && (
+        <div className="mb-12">
+          <DetailedActionPlan
+            selectedOpportunities={selectedOpportunities}
+            selectedPathways={selectedPathways}
             userResponses={onboardingData ? {
               openResponses: onboardingData.openResponses,
               preferenceResponses: onboardingData.preferenceResponses,
@@ -432,21 +459,6 @@ export default function Dashboard({ showOnboardingReminder, onResumeOnboarding }
           />
         </div>
       )}
-
-      {/* Reminders Section */}
-      {actionPlan &&
-        (settingsPreferences.whatsappReminders ? (
-          <div className="mb-8">
-            <RemindersSection phoneNumber={phoneNumber} actionPlan={actionPlan} />
-          </div>
-        ) : (
-          <Card className="mb-8 p-6">
-            <h3 className="text-lg font-semibold mb-2">Recordatorios desactivados</h3>
-            <p className="text-sm text-muted-foreground">
-              Activa los recordatorios por WhatsApp desde el panel de Configuración para programar mensajes automáticos.
-            </p>
-          </Card>
-        ))}
 
       {/* Pathway Detail Dialog */}
       {selectedPathwayForDialog && (

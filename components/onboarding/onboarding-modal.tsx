@@ -31,6 +31,7 @@ interface OnboardingData {
   name: string
   email: string
   phoneNumber: string
+  location: string
   schoolType: "colegio" | "universidad"
   schoolName: string
   currentYear: number
@@ -60,6 +61,7 @@ export default function OnboardingModal({ onComplete, onCancel }: OnboardingModa
     name: "",
     email: "",
     phoneNumber: "",
+    location: "",
     schoolType: "colegio",
     schoolName: "",
     currentYear: 1,
@@ -331,6 +333,17 @@ function SchoolInfoStep({
         </div>
 
         <div>
+          <label className="block text-sm font-medium mb-2">Tu ubicación (ciudad y país)</label>
+          <input
+            type="text"
+            placeholder="Ej: Santiago, Chile"
+            value={data.location}
+            onChange={(e) => onUpdate({ location: e.target.value })}
+            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+
+        <div>
           <label className="block text-sm font-medium mb-2">¿En qué año estás?</label>
           <select
             value={data.currentYear}
@@ -359,7 +372,7 @@ function SchoolInfoStep({
         <Button
           className="flex-1 bg-primary text-primary-foreground"
           onClick={onNext}
-          disabled={!data.schoolName || !data.name || !data.email || !data.phoneNumber}
+          disabled={!data.schoolName || !data.name || !data.email || !data.phoneNumber || !data.location}
         >
           Siguiente
         </Button>
