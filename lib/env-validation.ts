@@ -44,7 +44,7 @@ export function validateEnvironmentVariables(): EnvValidationResult {
  */
 export function logEnvValidation(result: EnvValidationResult) {
   if (result.isValid && result.warnings.length === 0) {
-    console.log("✅ All required environment variables are configured")
+    console.warn("✅ All required environment variables are configured")
     return
   }
 

@@ -5,7 +5,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Loader2, Sparkles, Plus, Lightbulb, Target } from "lucide-react"
 
 interface PathwayDetailDialogProps {

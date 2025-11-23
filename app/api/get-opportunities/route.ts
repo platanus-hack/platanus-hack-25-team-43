@@ -1,11 +1,24 @@
+interface Opportunity {
+  id: string
+  type: string
+  title: string
+  description: string
+  provider: string
+  company?: string
+  duration: string
+  location?: string
+  dates?: string
+  level?: string
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { pathways, userResponses } = body
+    const { pathways } = body
 
     // Mock opportunities database - in production, this would query your real database
     // or use AI to generate personalized opportunities
-    const opportunitiesDatabase: Record<string, Array<any>> = {
+    const opportunitiesDatabase: Record<string, Array<Opportunity>> = {
       "Software Engineering": [
         {
           id: "1",
@@ -366,7 +379,7 @@ export async function POST(request: Request) {
     }
 
     // Collect opportunities for selected pathways
-    const opportunities: any[] = []
+    const opportunities: Opportunity[] = []
     pathways.forEach((pathway: string) => {
       const pathwayOps = opportunitiesDatabase[pathway as keyof typeof opportunitiesDatabase] || []
       opportunities.push(...pathwayOps)

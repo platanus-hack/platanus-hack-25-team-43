@@ -85,6 +85,35 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { OpenEndedResponses, PreferenceResponses } from "@/lib/onboarding-questions"
 import { Rocket, Calendar, Briefcase, BookOpen, Clock, CheckCircle2, Target, Award, Lightbulb, TrendingUp, Settings, Laptop } from "lucide-react"
 
+interface ActionPlan {
+  id?: string
+  title?: string
+  overview?: string
+  weeks?: Array<{
+    week: number
+    title: string
+    pathwayFocus: string
+    tasks: Array<{
+      task: string
+      priority: "high" | "medium" | "low"
+      dailyHabit: boolean
+    }>
+    milestone: string
+  }>
+  checkpoints?: Array<{
+    week: number
+    checkpoint: string
+    successMetrics: string[]
+  }>
+  resources?: Array<{
+    type: string
+    title: string
+    timing: string
+  }>
+  pathways?: string[]
+  createdAt?: string
+}
+
 interface ActionPlanGeneratorProps {
   userData: {
     name: string
@@ -95,12 +124,12 @@ interface ActionPlanGeneratorProps {
     openResponses: OpenEndedResponses
     preferenceResponses: PreferenceResponses
   }
-  onPlanGenerated: (plan: any) => void
+  onPlanGenerated: (plan: ActionPlan) => void
 }
 
 export default function ActionPlanGenerator({ userData, onPlanGenerated }: ActionPlanGeneratorProps) {
   const [isGenerating, setIsGenerating] = useState(false)
-  const [generatedPlan, setGeneratedPlan] = useState<any>(null)
+  const [generatedPlan, setGeneratedPlan] = useState<ActionPlan | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showGenerator, setShowGenerator] = useState(false)
 
@@ -136,9 +165,9 @@ export default function ActionPlanGenerator({ userData, onPlanGenerated }: Actio
         
         const result = await response.json()
         if (result.success) {
-          console.log('[ActionPlanGenerator] Plan saved to Supabase')
+          console.warn('[ActionPlanGenerator] Plan saved to Supabase')
         } else if (result.requiresAuth) {
-          console.log('[ActionPlanGenerator] Plan saved to localStorage only (not authenticated)')
+          console.warn('[ActionPlanGenerator] Plan saved to localStorage only (not authenticated)')
         }
       } catch (supabaseError) {
         console.warn('[ActionPlanGenerator] Could not save to Supabase, plan saved to localStorage only:', supabaseError)
@@ -259,7 +288,7 @@ export default function ActionPlanGenerator({ userData, onPlanGenerated }: Actio
   )
 }
 
-function ActionPlanDisplay({ plan }: { plan: any }) {
+function ActionPlanDisplay({ plan }: { plan: ActionPlan }) {
   const [selectedWeek, setSelectedWeek] = useState(1)
 
   return (
@@ -293,7 +322,7 @@ function ActionPlanDisplay({ plan }: { plan: any }) {
         <TabsContent value="weeks" className="space-y-4">
           {/* Week Selector */}
           <div className="flex flex-wrap gap-2">
-            {plan.weeks?.map((week: any) => (
+            {plan.weeks?.map((week) => (
               <Button
                 key={week.week}
                 variant={selectedWeek === week.week ? "default" : "outline"}
@@ -306,7 +335,7 @@ function ActionPlanDisplay({ plan }: { plan: any }) {
           </div>
 
           {/* Selected Week Details */}
-          {plan.weeks?.filter((w: any) => w.week === selectedWeek).map((week: any) => (
+          {plan.weeks?.filter((w) => w.week === selectedWeek).map((week) => (
             <Card key={week.week} className="p-6">
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-2">
@@ -322,7 +351,7 @@ function ActionPlanDisplay({ plan }: { plan: any }) {
 
               <div className="space-y-3">
                 <h4 className="font-semibold text-foreground">Tareas:</h4>
-                {week.tasks?.map((task: any, idx: number) => (
+                {week.tasks?.map((task, idx: number) => (
                   <div key={idx} className="flex items-start gap-3 p-3 bg-muted rounded-lg">
                     <input type="checkbox" className="mt-1" />
                     <div className="flex-1">
@@ -356,7 +385,7 @@ function ActionPlanDisplay({ plan }: { plan: any }) {
             <Card className="p-6 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
               <h4 className="font-bold text-foreground mb-4 flex items-center gap-2"><Target className="h-5 w-5" /> Checkpoints de Progreso</h4>
               <div className="space-y-3">
-                {plan.checkpoints.map((checkpoint: any, idx: number) => (
+                {plan.checkpoints.map((checkpoint, idx: number) => (
                   <div key={idx} className="p-4 bg-white dark:bg-gray-900 rounded-lg">
                     <h5 className="font-semibold text-foreground mb-2">
                       Semana {checkpoint.week}: {checkpoint.title}
@@ -378,7 +407,7 @@ function ActionPlanDisplay({ plan }: { plan: any }) {
         </TabsContent>
 
         <TabsContent value="opportunities" className="space-y-4">
-          {plan.opportunities?.map((opp: any, idx: number) => {
+          {plan.opportunities?.map((opp: { type: string; title: string; provider: string; cost?: string; description: string; pathway?: string; applicationPeriod?: string; deadline?: string; recommendedWeek?: number; url?: string }, idx: number) => {
             const getOppIcon = (type: string) => {
               switch(type) {
                 case "internship": return <Briefcase className="h-6 w-6 text-primary" />
@@ -452,7 +481,7 @@ function ActionPlanDisplay({ plan }: { plan: any }) {
 
         <TabsContent value="resources" className="space-y-4">
           <div className="grid gap-4">
-            {plan.resources?.map((resource: any, idx: number) => {
+            {plan.resources?.map((resource: { type: string; title: string; cost?: string; description?: string; pathway?: string; timing?: string; url?: string }, idx: number) => {
               const getResourceIcon = (type: string) => {
                 switch(type) {
                   case "book": return <BookOpen className="h-8 w-8 text-primary" />
@@ -500,7 +529,7 @@ function ActionPlanDisplay({ plan }: { plan: any }) {
         </TabsContent>
 
         <TabsContent value="reminders" className="space-y-4">
-          {plan.reminders?.map((reminder: any, idx: number) => {
+          {plan.reminders?.map((reminder: { type: string; title: string; week?: number; description?: string; date?: string }, idx: number) => {
             const getReminderIcon = (type: string) => {
               switch(type) {
                 case "checkpoint": return <Target className="h-6 w-6" />

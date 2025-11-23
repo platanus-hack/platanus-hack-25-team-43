@@ -5,13 +5,26 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { getReminders, scheduleReminders } from "@/lib/reminders-client"
 
+interface ActionPlan {
+  weeks?: Array<{ week: number; tasks: unknown[] }>
+  pathways?: string[]
+  [key: string]: unknown
+}
+
+interface Reminder {
+  id: string
+  week: number
+  scheduledAt: string
+  [key: string]: unknown
+}
+
 interface RemindersSectionProps {
   phoneNumber?: string
-  actionPlan?: any
+  actionPlan?: ActionPlan
 }
 
 export default function RemindersSection({ phoneNumber, actionPlan }: RemindersSectionProps) {
-  const [reminders, setReminders] = useState<any[]>([])
+  const [reminders, setReminders] = useState<Reminder[]>([])
   const [inputPhoneNumber, setInputPhoneNumber] = useState(phoneNumber || "")
   const [isLoading, setIsLoading] = useState(false)
   const [showForm, setShowForm] = useState(!phoneNumber)

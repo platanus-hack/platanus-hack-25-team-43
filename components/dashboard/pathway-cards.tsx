@@ -1,8 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import PathwayDetailDialog from "./pathway-detail-dialog"
 import { Laptop, Rocket, BarChart3, Clock, BookOpen, ArrowRight } from "lucide-react"
 

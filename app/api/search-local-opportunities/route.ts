@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { pathway, location, userResponses, specificTopic } = body
 
-    console.log('[search-local-opportunities] Request:', { pathway, location, specificTopic })
+    console.warn('[search-local-opportunities] Request:', { pathway, location, specificTopic })
 
     if (!pathway || !location) {
       return NextResponse.json(
@@ -58,7 +58,7 @@ Responde SOLO con un JSON válido en el siguiente formato:
 
 NO incluyas explicaciones adicionales, SOLO el JSON.`
 
-    console.log('[search-local-opportunities] Calling AI...')
+    console.warn('[search-local-opportunities] Calling AI...')
 
     const result = await generateText({
       model: anthropic("claude-3-haiku-20240307"),
@@ -68,7 +68,7 @@ NO incluyas explicaciones adicionales, SOLO el JSON.`
     })
 
     const responseText = result.text
-    console.log('[search-local-opportunities] AI Response length:', responseText?.length || 0)
+    console.warn('[search-local-opportunities] AI Response length:', responseText?.length || 0)
     
     if (!responseText) {
       console.error("[search-local-opportunities] Empty response from AI")
@@ -79,7 +79,7 @@ NO incluyas explicaciones adicionales, SOLO el JSON.`
     }
 
     // Try to extract JSON from response
-    let jsonMatch = responseText.match(/\{[\s\S]*\}/)
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
       console.error("[search-local-opportunities] No JSON found in response:", responseText.substring(0, 500))
       return NextResponse.json(
@@ -88,7 +88,7 @@ NO incluyas explicaciones adicionales, SOLO el JSON.`
       )
     }
 
-    console.log('[search-local-opportunities] Parsing JSON...')
+    console.warn('[search-local-opportunities] Parsing JSON...')
     const parsedData = JSON.parse(jsonMatch[0])
 
     if (!parsedData.opportunities || !Array.isArray(parsedData.opportunities)) {
@@ -99,7 +99,7 @@ NO incluyas explicaciones adicionales, SOLO el JSON.`
       )
     }
 
-    console.log('[search-local-opportunities] Success! Found', parsedData.opportunities.length, 'opportunities')
+    console.warn('[search-local-opportunities] Success! Found', parsedData.opportunities.length, 'opportunities')
 
     return NextResponse.json({
       success: true,

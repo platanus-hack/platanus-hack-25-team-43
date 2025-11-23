@@ -7,7 +7,7 @@ import { analyzeStudentResponses } from "@/lib/llm-client"
 import OpenEnded from "./open-ended"
 import MultipleChoice from "./multiple-choice"
 import PathwayDetailDialog from "@/components/dashboard/pathway-detail-dialog"
-import { Target, Rocket, CheckCircle2, Star, Lightbulb } from "lucide-react"
+import { Target, Rocket, CheckCircle2, Lightbulb } from "lucide-react"
 import {
   OPEN_ENDED_QUESTIONS,
   PREFERENCE_QUESTIONS,

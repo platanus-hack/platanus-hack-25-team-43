@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getLLMClient } from "@/lib/llm-client"
 
+interface Opportunity {
+  title: string
+  description: string
+  provider?: string
+  company?: string
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
@@ -16,7 +23,7 @@ export async function POST(req: NextRequest) {
     const llm = getLLMClient()
 
     const opportunitiesList = opportunities
-      .map((opp: any, idx: number) => `${idx + 1}. ${opp.title} - ${opp.description} (${opp.provider || opp.company || 'Proveedor no especificado'})`)
+      .map((opp: Opportunity, idx: number) => `${idx + 1}. ${opp.title} - ${opp.description} (${opp.provider || opp.company || 'Proveedor no especificado'})`)
       .join('\n')
 
     const prompt = `Eres un experto en planificación educativa y desarrollo de carrera.
@@ -102,7 +109,7 @@ NO incluyas explicaciones adicionales, SOLO el JSON.`
     const responseText = completion.choices[0]?.message?.content?.trim() || ""
     
     // Try to extract JSON from response
-    let jsonMatch = responseText.match(/\{[\s\S]*\}/)
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
       console.error("[generate-detailed-action-plan] No JSON found in response:", responseText)
       return NextResponse.json(

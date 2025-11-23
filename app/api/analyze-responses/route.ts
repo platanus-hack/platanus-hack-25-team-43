@@ -227,7 +227,7 @@ RESPONDE TODO EN ESPAÑOL.
       maxTokens: 2000,
     })
 
-    console.log("[v0] Raw LLM response:", text)
+    console.warn("[v0] Raw LLM response:", text)
 
     // Parse the LLM response with better error handling
     let analysis = null
@@ -240,7 +240,7 @@ RESPONDE TODO EN ESPAÑOL.
       }
       
       const jsonStr = jsonMatch[0]
-      console.log("[v0] Extracted JSON string:", jsonStr)
+      console.warn("[v0] Extracted JSON string:", jsonStr)
       
       // Try to parse the JSON
       analysis = JSON.parse(jsonStr)
@@ -258,7 +258,7 @@ RESPONDE TODO EN ESPAÑOL.
           // Remove newlines within strings
           cleaned = cleaned.replace(/"\s*\n\s*/g, '" ')
           
-          console.log("[v0] Trying to parse cleaned JSON:", cleaned)
+          console.warn("[v0] Trying to parse cleaned JSON:", cleaned)
           analysis = JSON.parse(cleaned)
         }
       } catch (cleanupError) {
@@ -281,11 +281,12 @@ RESPONDE TODO EN ESPAÑOL.
     
     // Log detailed error information for debugging
     if (error && typeof error === 'object') {
+      const errorObj = error as Error & { statusCode?: number; responseBody?: string; cause?: unknown }
       console.error("[v0] Error details:", {
-        message: (error as any).message,
-        statusCode: (error as any).statusCode,
-        responseBody: (error as any).responseBody,
-        cause: (error as any).cause,
+        message: errorObj.message,
+        statusCode: errorObj.statusCode,
+        responseBody: errorObj.responseBody,
+        cause: errorObj.cause,
       })
     }
     

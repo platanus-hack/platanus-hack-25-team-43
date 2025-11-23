@@ -1,4 +1,10 @@
-export async function scheduleReminders(phoneNumber: string, actionPlan: any) {
+interface ActionPlan {
+  weeks?: Array<{ week: number; tasks: unknown[] }>
+  pathways?: string[]
+  [key: string]: unknown
+}
+
+export async function scheduleReminders(phoneNumber: string, actionPlan: ActionPlan) {
   try {
     const response = await fetch("/api/reminders/schedule", {
       method: "POST",
@@ -37,7 +43,13 @@ export async function getReminders(phoneNumber: string) {
   }
 }
 
-export async function createReminder(phoneNumber: string, weekNumber: number, tasks: any[]) {
+interface Task {
+  task: string
+  priority: string
+  [key: string]: unknown
+}
+
+export async function createReminder(phoneNumber: string, weekNumber: number, tasks: Task[]) {
   try {
     const response = await fetch("/api/reminders/create", {
       method: "POST",

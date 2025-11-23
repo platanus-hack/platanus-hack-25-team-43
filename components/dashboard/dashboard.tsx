@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Settings as SettingsIcon, Target, CheckCircle2, Lock } from "lucide-react"
+import { Settings as SettingsIcon, Target, CheckCircle2 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -186,7 +186,7 @@ export default function Dashboard({ showOnboardingReminder, onResumeOnboarding }
         const result = await response.json()
         
         if (result.success && result.plan) {
-          console.log('[Dashboard] Action plan loaded from Supabase')
+          console.warn('[Dashboard] Action plan loaded from Supabase')
           setActionPlan(result.plan)
           // Also update localStorage
           localStorage.setItem("actionPlan", JSON.stringify(result.plan))
@@ -202,7 +202,7 @@ export default function Dashboard({ showOnboardingReminder, onResumeOnboarding }
         try {
           const parsedPlan = JSON.parse(savedActionPlan)
           setActionPlan(parsedPlan)
-          console.log('[Dashboard] Action plan loaded from localStorage')
+          console.warn('[Dashboard] Action plan loaded from localStorage')
         } catch (error) {
           console.error("Error parsing saved action plan", error)
         }

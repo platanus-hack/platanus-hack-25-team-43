@@ -241,7 +241,7 @@ IMPORTANTE:
       maxTokens: 4000,
     })
 
-    console.log("[v0] Raw LLM response (first 500 chars):", text.substring(0, 500))
+    console.warn("[v0] Raw LLM response (first 500 chars):", text.substring(0, 500))
 
     // Parse the LLM response with better error handling
     let plan = null
@@ -254,7 +254,7 @@ IMPORTANTE:
       }
       
       const jsonStr = jsonMatch[0]
-      console.log("[v0] Extracted JSON string length:", jsonStr.length)
+      console.warn("[v0] Extracted JSON string length:", jsonStr.length)
       
       // Try to parse the JSON
       plan = JSON.parse(jsonStr)
@@ -280,7 +280,7 @@ IMPORTANTE:
           // Fix newlines in strings (replace with spaces)
           cleaned = cleaned.replace(/"([^"]*)\n\s*([^"]*)"/g, '"$1 $2"')
           
-          console.log("[v0] Trying to parse cleaned JSON (last 500 chars):", cleaned.slice(-500))
+          console.warn("[v0] Trying to parse cleaned JSON (last 500 chars):", cleaned.slice(-500))
           plan = JSON.parse(cleaned)
         }
       } catch (cleanupError) {
@@ -292,7 +292,7 @@ IMPORTANTE:
             const errorMatch = parseError.message.match(/position (\d+)/)
             if (errorMatch) {
               const errorPos = Number.parseInt(errorMatch[1])
-              console.log("[v0] Attempting to truncate at error position:", errorPos)
+              console.warn("[v0] Attempting to truncate at error position:", errorPos)
               let truncated = jsonMatch[0].substring(0, errorPos)
               // Try to close any open structures
               const openBraces = (truncated.match(/\{/g) || []).length - (truncated.match(/\}/g) || []).length
@@ -302,7 +302,7 @@ IMPORTANTE:
               // Close open brackets and braces
               truncated += ']'.repeat(Math.max(0, openBrackets))
               truncated += '}'.repeat(Math.max(0, openBraces))
-              console.log("[v0] Trying truncated JSON (last 200 chars):", truncated.slice(-200))
+              console.warn("[v0] Trying truncated JSON (last 200 chars):", truncated.slice(-200))
               plan = JSON.parse(truncated)
             }
           }
@@ -338,10 +338,11 @@ IMPORTANTE:
     
     // Detailed error logging
     if (error && typeof error === 'object') {
+      const errorObj = error as Error & { statusCode?: number; responseBody?: string }
       console.error("[v0] Error details:", {
-        message: (error as any).message,
-        statusCode: (error as any).statusCode,
-        responseBody: (error as any).responseBody,
+        message: errorObj.message,
+        statusCode: errorObj.statusCode,
+        responseBody: errorObj.responseBody,
       })
     }
     

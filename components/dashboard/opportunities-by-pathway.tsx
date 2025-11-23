@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Sparkles, ExternalLink, MapPin, Loader2 } from "lucide-react"
 
 interface OpportunitiesByPathwayProps {
@@ -222,7 +221,6 @@ export default function OpportunitiesByPathway({
   const [opportunities, setOpportunities] = useState<Record<string, Opportunity[]>>({})
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingLocal, setIsLoadingLocal] = useState<Record<string, boolean>>({})
-  const [error, setError] = useState<string | null>(null)
   const [selectedOpportunities, setSelectedOpportunities] = useState<string[]>([])
 
   useEffect(() => {
@@ -328,13 +326,7 @@ export default function OpportunitiesByPathway({
         </div>
       )}
 
-      {error && (
-        <div className="text-center py-8">
-          <p className="text-destructive">{error}</p>
-        </div>
-      )}
-
-      {!isLoading && !error && (
+      {!isLoading && (
         <Tabs defaultValue={selectedPathways[0]} className="w-full">
           <div className="overflow-x-auto pb-2 -mx-6 px-6 mb-6">
             <TabsList className="inline-flex w-auto min-w-min gap-2">
