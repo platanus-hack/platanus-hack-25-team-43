@@ -1,6 +1,9 @@
 "use client"
 
 import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import PathwayDetailDialog from "@/components/dashboard/pathway-detail-dialog"
+import { Laptop, BarChart3, Palette, TrendingUp, Rocket, Target, Search, Star } from "lucide-react"
 
 interface PathwayData {
   name: string
@@ -14,30 +17,54 @@ interface PathwayRecommendationsProps {
   onSelectPathway: (pathway: string) => void
   recommendedPathways?: PathwayData[]
   isLoading?: boolean
+  userResponses?: {
+    openResponses?: Record<string, string>
+    preferenceResponses?: Record<string, string>
+    schoolType?: string
+    currentYear?: number
+  }
 }
 
 const DEFAULT_PATHWAYS = [
-  { name: "Software Engineering", icon: "💻" },
-  { name: "Product Management", icon: "📊" },
-  { name: "UX/UI Design", icon: "🎨" },
-  { name: "Data Science", icon: "📈" },
-  { name: "Startup Founder", icon: "🚀" },
-  { name: "Business Strategy", icon: "🎯" },
+  { name: "Software Engineering", icon: "Laptop" },
+  { name: "Product Management", icon: "BarChart3" },
+  { name: "UX/UI Design", icon: "Palette" },
+  { name: "Data Science", icon: "TrendingUp" },
+  { name: "Startup Founder", icon: "Rocket" },
+  { name: "Business Strategy", icon: "Target" },
 ]
+
+const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+  Laptop: Laptop,
+  BarChart3: BarChart3,
+  Palette: Palette,
+  TrendingUp: TrendingUp,
+  Rocket: Rocket,
+  Target: Target,
+  Star: Star,
+}
 
 export default function PathwayRecommendations({
   selectedPathways,
   onSelectPathway,
   recommendedPathways,
   isLoading = false,
+  userResponses,
 }: PathwayRecommendationsProps) {
   const [expandedPathway, setExpandedPathway] = useState<string | null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [selectedForDialog, setSelectedForDialog] = useState<{ name: string; icon: string } | null>(null)
 
   const displayPathways =
     recommendedPathways?.map((p) => ({
       name: p.name,
-      icon: "⭐",
+      icon: "Star",
     })) || DEFAULT_PATHWAYS
+
+  const handleExplorePathway = (pathway: { name: string; icon: string }) => {
+    setSelectedForDialog(pathway)
+    setDialogOpen(true)
+  }
 
   return (
     <div>
@@ -53,6 +80,7 @@ export default function PathwayRecommendations({
           const isRecommended = !!pathwayData
           const isSelected = selectedPathways.includes(pathway.name)
           const isExpanded = expandedPathway === pathway.name
+          const IconComponent = iconMap[pathway.icon] || Star
 
           return (
             <div key={pathway.name} className="relative">
@@ -64,7 +92,7 @@ export default function PathwayRecommendations({
               >
                 <div className="flex items-start justify-between">
                   <div>
-                    <div className="text-2xl mb-2">{pathway.icon}</div>
+                    <IconComponent className="h-8 w-8 text-primary mb-2" />
                     <p className="font-medium text-sm">{pathway.name}</p>
                   </div>
                   {isRecommended && (
@@ -74,12 +102,27 @@ export default function PathwayRecommendations({
               </button>
 
               {isRecommended && (
-                <button
-                  onClick={() => setExpandedPathway(isExpanded ? null : pathway.name)}
-                  className="text-xs text-primary mt-1 underline"
-                >
-                  {isExpanded ? "Hide details" : "View details"}
-                </button>
+                <div className="flex flex-col gap-1 mt-2">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setExpandedPathway(isExpanded ? null : pathway.name)}
+                      className="text-xs h-7 flex-1"
+                    >
+                      {isExpanded ? "Hide details" : "View details"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleExplorePathway(pathway)}
+                      className="text-xs h-7 flex-1 gap-1"
+                    >
+                      <Search className="h-3 w-3" />
+                      <span>Explore with AI</span>
+                    </Button>
+                  </div>
+                </div>
               )}
 
               {isExpanded && pathwayData && (
@@ -101,6 +144,23 @@ export default function PathwayRecommendations({
           )
         })}
       </div>
+
+      {selectedForDialog && (
+        <PathwayDetailDialog
+          pathway={{
+            title: selectedForDialog.name,
+            description: recommendedPathways?.find((p) => p.name === selectedForDialog.name)?.rationale || "Explore this pathway",
+            icon: selectedForDialog.icon,
+            duration: recommendedPathways?.find((p) => p.name === selectedForDialog.name)?.timeline || "Variable",
+          }}
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          userResponses={userResponses ? {
+            ...userResponses,
+            selectedPathways: selectedPathways,
+          } : undefined}
+        />
+      )}
     </div>
   )
 }

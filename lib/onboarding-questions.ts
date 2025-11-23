@@ -17,6 +17,13 @@ export type PreferenceQuestionId =
   | "technologyComfort"
   | "communicationStyle"
 
+export type UniversityPurposeQuestionId =
+  | "universityMainPurpose"
+  | "campusPreference"
+  | "specialistVsGeneralist"
+  | "learningStylePreference"
+  | "academicSocialIntegration"
+
 export interface OpenEndedQuestion {
   id: OpenEndedQuestionId
   label: string
@@ -29,8 +36,15 @@ export interface PreferenceQuestion {
   options: string[]
 }
 
+export interface UniversityPurposeQuestion {
+  id: UniversityPurposeQuestionId
+  question: string
+  options: string[]
+}
+
 export type OpenEndedResponses = Record<OpenEndedQuestionId, string>
 export type PreferenceResponses = Record<PreferenceQuestionId, string>
+export type UniversityPurposeResponses = Record<UniversityPurposeQuestionId, string>
 
 export const OPEN_ENDED_QUESTIONS: OpenEndedQuestion[] = [
   {
@@ -128,5 +142,59 @@ export const createEmptyPreferenceResponses = (): PreferenceResponses =>
     acc[question.id] = ""
     return acc
   }, {} as PreferenceResponses)
+
+export const UNIVERSITY_PURPOSE_QUESTIONS: UniversityPurposeQuestion[] = [
+  {
+    id: "universityMainPurpose",
+    question: "¿Cuál es el propósito principal de la universidad para ti?",
+    options: [
+      "Dominar conocimiento teórico profundo en una materia",
+      "Ganar habilidades prácticas listas para el trabajo",
+      "Una mezcla equilibrada de ambos"
+    ]
+  },
+  {
+    id: "campusPreference",
+    question: "¿Qué tipo de entorno universitario prefieres?",
+    options: [
+      "Una 'burbuja universitaria' donde mi vida gira en torno al campus",
+      "Un campus en una gran ciudad donde mi vida se integra con una comunidad diversa y no estudiantil",
+      "No tengo una preferencia clara"
+    ]
+  },
+  {
+    id: "specialistVsGeneralist",
+    question: "¿Qué te emociona más?",
+    options: [
+      "Convertirme en un experto destacado en una especialidad específica",
+      "Ser un generalista que combina ideas de muchas materias diferentes",
+      "Algo intermedio"
+    ]
+  },
+  {
+    id: "learningStylePreference",
+    question: "¿Qué estilo de aprendizaje suena mejor?",
+    options: [
+      "Clases grandes y formales con profesores famosos",
+      "Seminarios pequeños basados en discusión con interacción cercana con profesores",
+      "Una combinación de ambos"
+    ]
+  },
+  {
+    id: "academicSocialIntegration",
+    question: "¿Quieres que tu vida académica y social estén...?",
+    options: [
+      "Estrechamente integradas (grupos de estudio, eventos de residencias, laboratorios de investigación)",
+      "Claramente separadas (vas a clase, luego te enfocas en pasatiempos, familia o trabajo)",
+      "Un equilibrio entre ambos"
+    ]
+  }
+]
+
+export const createEmptyUniversityPurposeResponses = (): UniversityPurposeResponses =>
+  UNIVERSITY_PURPOSE_QUESTIONS.reduce((acc, question) => {
+    acc[question.id] = ""
+    return acc
+  }, {} as UniversityPurposeResponses)
 
 

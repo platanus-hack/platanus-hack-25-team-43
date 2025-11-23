@@ -6,16 +6,21 @@ import { Button } from "@/components/ui/button"
 import { analyzeStudentResponses } from "@/lib/llm-client"
 import OpenEnded from "./open-ended"
 import MultipleChoice from "./multiple-choice"
+import PathwayDetailDialog from "@/components/dashboard/pathway-detail-dialog"
+import { Target, Rocket, CheckCircle2, Star, Lightbulb } from "lucide-react"
 import {
   OPEN_ENDED_QUESTIONS,
   PREFERENCE_QUESTIONS,
+  UNIVERSITY_PURPOSE_QUESTIONS,
   createEmptyOpenResponses,
   createEmptyPreferenceResponses,
+  createEmptyUniversityPurposeResponses,
   type OpenEndedResponses,
   type PreferenceResponses,
+  type UniversityPurposeResponses,
 } from "@/lib/onboarding-questions"
 
-type OnboardingStep = "schoolInfo" | "knowledge" | "preferences" | "grades" | "pathways" | "selection" | "summary"
+type OnboardingStep = "schoolInfo" | "knowledge" | "preferences" | "universityPurpose" | "grades" | "pathways" | "selection" | "summary"
 
 interface GradeEntry {
   subject: string
@@ -31,6 +36,7 @@ interface OnboardingData {
   currentYear: number
   openResponses: OpenEndedResponses
   preferenceResponses: PreferenceResponses
+  universityPurposeResponses: UniversityPurposeResponses
   grades: GradeEntry[]
   selectedPathways: string[]
   customTracks: string[]
@@ -59,6 +65,7 @@ export default function OnboardingModal({ onComplete, onCancel }: OnboardingModa
     currentYear: 1,
     openResponses: createEmptyOpenResponses(),
     preferenceResponses: createEmptyPreferenceResponses(),
+    universityPurposeResponses: createEmptyUniversityPurposeResponses(),
     grades: [],
     selectedPathways: [],
     customTracks: [],
@@ -73,12 +80,12 @@ export default function OnboardingModal({ onComplete, onCancel }: OnboardingModa
     if (savedData) {
       try {
         const parsed = JSON.parse(savedData)
-        setData({
-          ...defaultData,
+        setData((prev) => ({
+          ...prev,
           ...parsed,
           email: parsed.email || "",
           name: parsed.name || "",
-        })
+        }))
       } catch (error) {
         console.error("Error loading onboarding data:", error)
       }
@@ -86,7 +93,7 @@ export default function OnboardingModal({ onComplete, onCancel }: OnboardingModa
   }, [])
 
   const handleNext = async () => {
-    const steps: OnboardingStep[] = ["schoolInfo", "knowledge", "preferences", "grades", "pathways", "selection", "summary"]
+    const steps: OnboardingStep[] = ["schoolInfo", "knowledge", "preferences", "universityPurpose", "grades", "pathways", "selection", "summary"]
     const currentIndex = steps.indexOf(currentStep)
 
     if (currentStep === "grades" && currentIndex < steps.length - 1) {
@@ -99,6 +106,7 @@ export default function OnboardingModal({ onComplete, onCancel }: OnboardingModa
           currentYear: data.currentYear,
           openResponses: data.openResponses,
           preferenceResponses: data.preferenceResponses,
+          universityPurposeResponses: data.universityPurposeResponses,
           grades: data.grades,
         })
         setRecommendedPathways(pathways)
@@ -117,7 +125,7 @@ export default function OnboardingModal({ onComplete, onCancel }: OnboardingModa
   }
 
   const handlePrevious = () => {
-    const steps: OnboardingStep[] = ["schoolInfo", "knowledge", "preferences", "grades", "pathways", "selection", "summary"]
+    const steps: OnboardingStep[] = ["schoolInfo", "knowledge", "preferences", "universityPurpose", "grades", "pathways", "selection", "summary"]
     const currentIndex = steps.indexOf(currentStep)
     if (currentIndex > 0) {
       setCurrentStep(steps[currentIndex - 1])
@@ -187,6 +195,14 @@ export default function OnboardingModal({ onComplete, onCancel }: OnboardingModa
             onPrevious={handlePrevious}
           />
         )}
+        {currentStep === "universityPurpose" && (
+          <UniversityPurposeStep
+            data={data}
+            onUpdate={(updates) => setData({ ...data, ...updates })}
+            onNext={handleNext}
+            onPrevious={handlePrevious}
+          />
+        )}
         {currentStep === "grades" && (
           <GradesStep
             data={data}
@@ -203,6 +219,7 @@ export default function OnboardingModal({ onComplete, onCancel }: OnboardingModa
             onSelectPathway={handleSelectPathway}
             onNext={handleNext}
             onPrevious={handlePrevious}
+            userData={data}
           />
         )}
         {currentStep === "selection" && (
@@ -450,6 +467,58 @@ function PreferencesStep({
   )
 }
 
+function UniversityPurposeStep({
+  data,
+  onUpdate,
+  onNext,
+  onPrevious,
+}: {
+  data: OnboardingData
+  onUpdate: (updates: Partial<OnboardingData>) => void
+  onNext: () => void
+  onPrevious: () => void
+}) {
+  const allAnswered = Object.values(data.universityPurposeResponses).every((answer) => answer.trim().length > 0)
+
+  return (
+    <div className="p-8">
+      <h2 className="text-2xl font-bold text-foreground mb-2">Tu Visión Universitaria</h2>
+      <p className="text-muted-foreground mb-6">
+        Estas preguntas nos ayudan a entender mejor qué tipo de experiencia universitaria buscas
+      </p>
+
+      <div className="space-y-5">
+        {UNIVERSITY_PURPOSE_QUESTIONS.map((question) => (
+          <div key={question.id}>
+            <label className="block text-sm font-medium mb-3">{question.question}</label>
+            <MultipleChoice
+              options={question.options}
+              selected={data.universityPurposeResponses[question.id]}
+              onSelect={(option) =>
+                onUpdate({
+                  universityPurposeResponses: {
+                    ...data.universityPurposeResponses,
+                    [question.id]: option,
+                  },
+                })
+              }
+            />
+          </div>
+        ))}
+      </div>
+
+      <div className="flex gap-4 mt-8">
+        <Button variant="outline" className="flex-1 bg-transparent" onClick={onPrevious}>
+          Anterior
+        </Button>
+        <Button className="flex-1 bg-primary text-primary-foreground" onClick={onNext} disabled={!allAnswered}>
+          Siguiente
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 function GradesStep({
   data,
   onUpdate,
@@ -577,13 +646,24 @@ function PathwaysStep({
   onSelectPathway,
   onNext,
   onPrevious,
+  userData,
 }: {
   recommendedPathways: PathwayData[]
   selectedPathways: string[]
   onSelectPathway: (pathway: string) => void
   onNext: () => void
   onPrevious: () => void
+  userData: OnboardingData
 }) {
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [selectedForDialog, setSelectedForDialog] = useState<PathwayData | null>(null)
+
+  const handleExplorePathway = (pathway: PathwayData, e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent pathway selection
+    setSelectedForDialog(pathway)
+    setDialogOpen(true)
+  }
+
   return (
     <div className="p-8">
       <h2 className="text-2xl font-bold text-foreground mb-2">Tus Caminos Recomendados</h2>
@@ -591,19 +671,38 @@ function PathwaysStep({
 
       <div className="space-y-4 mb-6">
         {recommendedPathways.map((pathway) => (
-          <button
-            key={pathway.name}
-            onClick={() => onSelectPathway(pathway.name)}
-            className={`w-full p-4 text-left rounded-lg border-2 transition-all ${
-              selectedPathways.includes(pathway.name)
-                ? "border-primary bg-primary/10"
-                : "border-input hover:border-primary/50"
-            }`}
-          >
-            <h3 className="font-bold text-foreground mb-1">{pathway.name}</h3>
-            <p className="text-sm text-muted-foreground mb-2">{pathway.rationale}</p>
-            <p className="text-xs text-primary font-medium">{pathway.timeline}</p>
-          </button>
+          <div key={pathway.name} className="relative">
+            <div className="flex gap-2">
+              {/* Small button to select/check pathway */}
+              <button
+                onClick={() => onSelectPathway(pathway.name)}
+                className={`flex-shrink-0 w-12 h-12 rounded-lg border-2 transition-all flex items-center justify-center ${
+                  selectedPathways.includes(pathway.name)
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-input hover:border-primary/50"
+                }`}
+              >
+                {selectedPathways.includes(pathway.name) ? (
+                  <CheckCircle2 className="h-6 w-6" />
+                ) : (
+                  <CheckCircle2 className="h-6 w-6 opacity-30" />
+                )}
+              </button>
+
+              {/* Big button to explore pathway */}
+              <button
+                onClick={(e) => handleExplorePathway(pathway, e)}
+                className="flex-1 p-4 text-left rounded-lg border-2 transition-all border-input hover:border-primary/50 hover:bg-primary/5"
+              >
+                <h3 className="font-bold text-foreground mb-1">{pathway.name}</h3>
+                <p className="text-sm text-muted-foreground mb-2">{pathway.rationale}</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-primary font-medium">{pathway.timeline}</p>
+                  <span className="text-xs text-muted-foreground">Click para explorar con IA →</span>
+                </div>
+              </button>
+            </div>
+          </div>
         ))}
       </div>
 
@@ -619,6 +718,26 @@ function PathwaysStep({
           Siguiente
         </Button>
       </div>
+
+      {selectedForDialog && (
+        <PathwayDetailDialog
+          pathway={{
+            title: selectedForDialog.name,
+            description: selectedForDialog.rationale,
+            icon: "Star",
+            duration: selectedForDialog.timeline,
+          }}
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          userResponses={{
+            openResponses: userData.openResponses,
+            preferenceResponses: userData.preferenceResponses,
+            selectedPathways: selectedPathways,
+            schoolType: userData.schoolType,
+            currentYear: userData.currentYear,
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -705,14 +824,14 @@ function SummaryStep({
   return (
     <div className="p-8">
       <div className="text-center mb-8">
-        <div className="text-6xl mb-4">🎯</div>
+        <Target className="h-16 w-16 text-primary mb-4 mx-auto" />
         <h2 className="text-3xl font-bold text-foreground mb-2">¡Tu Ruta Está Lista!</h2>
         <p className="text-muted-foreground">Estos son los caminos que elegiste para tu futuro</p>
       </div>
 
       <div className="mb-8 p-6 bg-primary/5 rounded-lg border-2 border-primary/20">
         <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
-          <span className="text-2xl">🚀</span>
+          <Rocket className="h-6 w-6" />
           Tus Caminos Seleccionados
         </h3>
         <div className="space-y-3">
@@ -737,8 +856,9 @@ function SummaryStep({
       </div>
 
       <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
-        <p className="text-sm text-blue-900 dark:text-blue-100">
-          💡 <strong>Próximos pasos:</strong> Vamos a crear un plan de acción personalizado para cada uno de tus caminos con oportunidades, recursos y recordatorios.
+        <p className="text-sm text-blue-900 dark:text-blue-100 flex items-start gap-2">
+          <Lightbulb className="h-5 w-5 flex-shrink-0 mt-0.5" />
+          <span><strong>Próximos pasos:</strong> Vamos a crear un plan de acción personalizado para cada uno de tus caminos con oportunidades, recursos y recordatorios.</span>
         </p>
       </div>
 
@@ -746,8 +866,13 @@ function SummaryStep({
         <Button variant="outline" className="flex-1 bg-transparent" onClick={onPrevious}>
           Anterior
         </Button>
-        <Button className="flex-1 bg-primary text-primary-foreground text-lg py-6" onClick={onComplete} disabled={isSaving}>
-          {isSaving ? "Guardando..." : "🎓 Comenzar Mi Ruta"}
+        <Button className="flex-1 bg-primary text-primary-foreground text-lg py-6 gap-2" onClick={onComplete} disabled={isSaving}>
+          {isSaving ? "Guardando..." : (
+            <>
+              <Target className="h-5 w-5" />
+              <span>Comenzar Mi Ruta</span>
+            </>
+          )}
         </Button>
       </div>
     </div>

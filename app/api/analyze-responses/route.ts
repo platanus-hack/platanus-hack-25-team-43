@@ -82,7 +82,7 @@
 
 import { anthropic } from "@ai-sdk/anthropic"
 import { generateText } from "ai"
-import { OPEN_ENDED_QUESTIONS, PREFERENCE_QUESTIONS } from "@/lib/onboarding-questions"
+import { OPEN_ENDED_QUESTIONS, PREFERENCE_QUESTIONS, UNIVERSITY_PURPOSE_QUESTIONS } from "@/lib/onboarding-questions"
 
 export async function POST(request: Request) {
   try {
@@ -90,6 +90,7 @@ export async function POST(request: Request) {
     const { name, schoolType, schoolName, currentYear, grades } = body
     const openResponses: Record<string, string> = body.openResponses ?? {}
     const preferenceResponses: Record<string, string> = body.preferenceResponses ?? {}
+    const universityPurposeResponses: Record<string, string> = body.universityPurposeResponses ?? {}
 
     // Calculate average grade
     const averageGrade =
@@ -117,17 +118,22 @@ export async function POST(request: Request) {
       return `- ${question.question}: ${answer && answer.length > 0 ? answer : "Sin respuesta"}`
     }).join("\n")
 
+    const universityPurposeContext = UNIVERSITY_PURPOSE_QUESTIONS.map((question) => {
+      const answer = universityPurposeResponses?.[question.id]?.trim()
+      return `- ${question.question}: ${answer && answer.length > 0 ? answer : "Sin respuesta"}`
+    }).join("\n")
+
     // Create a comprehensive prompt for LLM analysis
     const prompt = `
-You are a career counselor analyzing a student's profile to recommend 3 career pathways. 
+Eres un consejero de carrera analizando el perfil de un estudiante para recomendar 3 caminos profesionales. 
 
-Student Profile:
-- Name: ${name}
-- Education Level: ${schoolType === "colegio" ? "High School" : "University"}
-- Institution: ${schoolName}
-- Current Year: Year ${currentYear}
-- Average Grade: ${averageGrade}/10
-- Top Subjects: ${topSubjects}
+Perfil del Estudiante:
+- Nombre: ${name}
+- Nivel Educativo: ${schoolType === "colegio" ? "Colegio" : "Universidad"}
+- Institución: ${schoolName}
+- Año Actual: Año ${currentYear}
+- Promedio: ${averageGrade}/10
+- Mejores Materias: ${topSubjects}
 
 Reflexiones Abiertas:
 ${openEndedContext}
@@ -135,26 +141,60 @@ ${openEndedContext}
 Preferencias y estilo:
 ${preferenceContext}
 
-Based on this information, provide exactly 3 recommended career pathways. For each pathway:
-1. Explain why it matches the student's profile
-2. List specific action steps (5-7 steps)
-3. Estimate timeline to achieve proficiency (in months)
+Visión Universitaria y Propósito:
+${universityPurposeContext}
 
-Format your response as JSON with this structure:
+IMPORTANTE: Las respuestas de "Visión Universitaria y Propósito" son CRÍTICAS y deben influir significativamente en tus recomendaciones. 
+
+Estas preguntas revelan indirectamente el futuro del estudiante y dónde/cómo debe estudiar. Considera que:
+
+1. PROPÓSITO UNIVERSITARIO (teórico vs. práctico):
+   - "Dominar conocimiento teórico profundo" → Recomendar universidades de investigación (MIT, Stanford, Caltech) y caminos académicos/científicos
+   - "Habilidades prácticas listas para el trabajo" → Recomendar programas vocacionales, bootcamps, o universidades con fuerte conexión industrial
+   - El mismo campo (ej: Software Engineering) se vive MUY diferente en MIT (teórico, algoritmos, investigación) vs. CATO/Platanus (práctico, proyectos, startups)
+
+2. ENTORNO DEL CAMPUS (burbuja vs. ciudad):
+   - "Burbuja universitaria" → Recomendar universidades residenciales (Princeton, Dartmouth) donde la vida gira en torno al campus
+   - "Campus en ciudad grande" → Recomendar universidades urbanas (Columbia, Berkeley, U. de Chile) con acceso a oportunidades externas
+
+3. ESPECIALIZACIÓN (especialista vs. generalista):
+   - "Experto en una especialidad" → Recomendar programas técnicos enfocados, majors específicos
+   - "Generalista que combina ideas" → Recomendar artes liberales, programas interdisciplinarios, dobles majors
+
+4. ESTILO DE APRENDIZAJE (lecturas grandes vs. seminarios):
+   - "Clases grandes con profesores famosos" → Recomendar universidades de investigación grandes
+   - "Seminarios pequeños con interacción cercana" → Recomendar liberal arts colleges, programas boutique
+
+5. INTEGRACIÓN ACADÉMICA-SOCIAL:
+   - "Estrechamente integradas" → Recomendar programas con cohorts, residencias temáticas, cultura de colaboración
+   - "Claramente separadas" → Recomendar programas flexibles, part-time, o ubicaciones que permitan balance vida-estudio
+
+Usa esta información para recomendar caminos que se alineen no solo con sus intereses, sino también con el TIPO ESPECÍFICO de experiencia universitaria y carrera que buscan.
+
+Basándote en esta información, proporciona exactamente 3 caminos profesionales recomendados. Para cada camino:
+1. Explica por qué se ajusta al perfil del estudiante (INCLUYENDO consideraciones de universidad y estilo de aprendizaje)
+2. Menciona brevemente qué tipo de programas universitarios o instituciones se alinean con este camino (si aplica)
+3. Lista pasos de acción específicos (5-7 pasos)
+4. Estima el tiempo para alcanzar competencia (en meses)
+
+IMPORTANTE: Tu respuesta debe estar completamente en español. Todos los nombres de caminos, razones, pasos y descripciones deben estar en español.
+
+Formatea tu respuesta como JSON con esta estructura:
 {
   "pathways": [
     {
-      "name": "Pathway Name",
-      "rationale": "Why this fits their profile",
-      "actionSteps": ["Step 1", "Step 2", ...],
-      "timeline": "X months"
+      "name": "Nombre del Camino",
+      "rationale": "Por qué esto se ajusta a su perfil, incluyendo consideraciones de universidad y estilo de aprendizaje. Menciona brevemente qué tipo de programas o instituciones se alinean con este camino.",
+      "actionSteps": ["Paso 1", "Paso 2", ...],
+      "timeline": "X meses"
     },
     ...
   ]
 }
 
-Ensure recommendations are ambitious yet achievable for a LATAM student looking to advance internacionalmente.
-Focus on practical, actionable pathways that align with their interests, emociones deseadas y estilo de trabajo preferido.
+Asegúrate de que las recomendaciones sean ambiciosas pero alcanzables para un estudiante de LATAM que busca avanzar internacionalmente.
+Enfócate en caminos prácticos y accionables que se alineen con sus intereses, emociones deseadas y estilo de trabajo preferido.
+RESPONDE TODO EN ESPAÑOL.
     `.trim()
 
     // Check if Anthropic API key is configured
@@ -187,12 +227,49 @@ Focus on practical, actionable pathways that align with their interests, emocion
       maxTokens: 2000,
     })
 
-    // Parse the LLM response
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    const analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : null
+    console.log("[v0] Raw LLM response:", text)
+
+    // Parse the LLM response with better error handling
+    let analysis = null
+    try {
+      // Try to extract JSON from the response
+      const jsonMatch = text.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) {
+        console.error("[v0] No JSON found in LLM response")
+        throw new Error("No JSON found in LLM response")
+      }
+      
+      const jsonStr = jsonMatch[0]
+      console.log("[v0] Extracted JSON string:", jsonStr)
+      
+      // Try to parse the JSON
+      analysis = JSON.parse(jsonStr)
+    } catch (parseError) {
+      console.error("[v0] JSON parsing failed:", parseError)
+      console.error("[v0] Attempted to parse:", text)
+      
+      // Try to clean up common JSON issues
+      try {
+        const jsonMatch = text.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          let cleaned = jsonMatch[0]
+          // Remove trailing commas before closing braces/brackets
+          cleaned = cleaned.replace(/,(\s*[}\]])/g, '$1')
+          // Remove newlines within strings
+          cleaned = cleaned.replace(/"\s*\n\s*/g, '" ')
+          
+          console.log("[v0] Trying to parse cleaned JSON:", cleaned)
+          analysis = JSON.parse(cleaned)
+        }
+      } catch (cleanupError) {
+        console.error("[v0] Cleanup parsing also failed:", cleanupError)
+        throw new Error("Failed to parse LLM response even after cleanup")
+      }
+    }
 
     if (!analysis || !analysis.pathways) {
-      throw new Error("Failed to parse LLM response")
+      console.error("[v0] Invalid analysis structure:", analysis)
+      throw new Error("Failed to parse LLM response: missing pathways")
     }
 
     return Response.json({

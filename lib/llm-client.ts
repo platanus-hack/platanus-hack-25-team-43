@@ -1,4 +1,6 @@
-import type { OpenEndedResponses, PreferenceResponses } from "@/lib/onboarding-questions"
+import type { OpenEndedResponses, PreferenceResponses, UniversityPurposeResponses } from "@/lib/onboarding-questions"
+import { anthropic } from "@ai-sdk/anthropic"
+import { generateText } from "ai"
 
 export async function analyzeStudentResponses(data: {
   name: string
@@ -7,6 +9,7 @@ export async function analyzeStudentResponses(data: {
   currentYear: number
   openResponses: OpenEndedResponses
   preferenceResponses: PreferenceResponses
+  universityPurposeResponses: UniversityPurposeResponses
   grades: Array<{ subject: string; grade: number }>
 }) {
   try {
@@ -51,5 +54,22 @@ export async function getOpportunitiesForPathways(pathways: string[]) {
   } catch (error) {
     console.error("[llm-client] Error in getOpportunitiesForPathways:", error)
     throw error
+  }
+}
+
+/**
+ * Get LLM client instance for server-side use
+ */
+export function getLLMClient() {
+  return {
+    async generateText(prompt: string) {
+      const { text } = await generateText({
+        model: anthropic("claude-3-haiku-20240307"),
+        prompt,
+        temperature: 0.7,
+        maxTokens: 2000,
+      })
+      return text
+    }
   }
 }

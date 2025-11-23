@@ -83,6 +83,7 @@ import { Button } from "@/components/ui/button"
 import { generateActionPlan } from "@/lib/action-plan-client"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { OpenEndedResponses, PreferenceResponses } from "@/lib/onboarding-questions"
+import { Rocket, Calendar, Briefcase, BookOpen, Clock, CheckCircle2, Target, Award, Lightbulb, TrendingUp, Settings, Laptop } from "lucide-react"
 
 interface ActionPlanGeneratorProps {
   userData: {
@@ -125,6 +126,24 @@ export default function ActionPlanGenerator({ userData, onPlanGenerated }: Actio
       // Save to localStorage
       localStorage.setItem("actionPlan", JSON.stringify(plan))
       
+      // Try to save to Supabase
+      try {
+        const response = await fetch('/api/action-plan/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plan })
+        })
+        
+        const result = await response.json()
+        if (result.success) {
+          console.log('[ActionPlanGenerator] Plan saved to Supabase')
+        } else if (result.requiresAuth) {
+          console.log('[ActionPlanGenerator] Plan saved to localStorage only (not authenticated)')
+        }
+      } catch (supabaseError) {
+        console.warn('[ActionPlanGenerator] Could not save to Supabase, plan saved to localStorage only:', supabaseError)
+      }
+      
       onPlanGenerated(plan)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al generar el plan")
@@ -136,55 +155,62 @@ export default function ActionPlanGenerator({ userData, onPlanGenerated }: Actio
 
   if (!showGenerator) {
     return (
-      <Card className="p-8 text-center bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950 border-2 border-blue-200 dark:border-blue-800">
-        <div className="text-6xl mb-4">🚀</div>
-        <h2 className="text-2xl font-bold text-foreground mb-3">
-          Genera Tu Plan de Acción Personalizado
-        </h2>
-        <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
-          Usa inteligencia artificial para crear un plan detallado de 12 semanas con:
-        </p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 max-w-3xl mx-auto">
-          <div className="p-4 bg-white dark:bg-gray-900 rounded-lg">
-            <div className="text-3xl mb-2">📅</div>
-            <p className="text-sm font-medium">Plan Semanal</p>
+      <Card className="p-6 mb-8 bg-gradient-to-r from-primary/10 via-primary/5 to-background border-2 border-primary/20">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <Rocket className="h-8 w-8 text-primary" />
+            <div>
+              <h2 className="text-2xl font-bold text-foreground">Genera Tu Plan de Acción</h2>
+              <p className="text-muted-foreground text-sm">Crea un plan detallado de 12 semanas personalizado con IA</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <div className="p-3 bg-background rounded-lg border border-primary/30 shadow-sm">
+            <Calendar className="h-6 w-6 text-primary mb-1" />
+            <p className="text-sm font-medium text-foreground">Plan Semanal</p>
             <p className="text-xs text-muted-foreground">12 semanas</p>
           </div>
-          <div className="p-4 bg-white dark:bg-gray-900 rounded-lg">
-            <div className="text-3xl mb-2">💼</div>
-            <p className="text-sm font-medium">Oportunidades</p>
+          <div className="p-3 bg-background rounded-lg border border-primary/30 shadow-sm">
+            <Briefcase className="h-6 w-6 text-primary mb-1" />
+            <p className="text-sm font-medium text-foreground">Oportunidades</p>
             <p className="text-xs text-muted-foreground">Internships & más</p>
           </div>
-          <div className="p-4 bg-white dark:bg-gray-900 rounded-lg">
-            <div className="text-3xl mb-2">📚</div>
-            <p className="text-sm font-medium">Recursos</p>
+          <div className="p-3 bg-background rounded-lg border border-primary/30 shadow-sm">
+            <BookOpen className="h-6 w-6 text-primary mb-1" />
+            <p className="text-sm font-medium text-foreground">Recursos</p>
             <p className="text-xs text-muted-foreground">Cursos & herramientas</p>
           </div>
-          <div className="p-4 bg-white dark:bg-gray-900 rounded-lg">
-            <div className="text-3xl mb-2">⏰</div>
-            <p className="text-sm font-medium">Recordatorios</p>
+          <div className="p-3 bg-background rounded-lg border border-primary/30 shadow-sm">
+            <Clock className="h-6 w-6 text-primary mb-1" />
+            <p className="text-sm font-medium text-foreground">Recordatorios</p>
             <p className="text-xs text-muted-foreground">Fechas clave</p>
           </div>
         </div>
-        <Button 
-          onClick={() => setShowGenerator(true)}
-          size="lg"
-          className="text-lg px-8"
-        >
-          Comenzar Generación
-        </Button>
+        
+        <div className="mt-4 pt-4 border-t border-primary/10">
+          <Button 
+            onClick={() => setShowGenerator(true)}
+            size="lg"
+            className="w-full"
+          >
+            <Lightbulb className="mr-2 h-5 w-5" />
+            Comenzar Generación
+          </Button>
+        </div>
       </Card>
     )
   }
 
   return (
     <div className="space-y-6">
-      <Card className="p-6 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950 border-2 border-blue-200 dark:border-blue-800">
-        <div className="flex items-center justify-between">
+      <Card className="p-6 bg-gradient-to-r from-primary/10 via-primary/5 to-background border-2 border-primary/20">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <span className="text-3xl">🤖</span>
+            <Settings className="h-8 w-8 text-primary animate-spin-slow" />
             <div>
-              <h2 className="text-xl font-bold text-foreground">Generador de Plan de Acción con IA</h2>
+              <h2 className="text-2xl font-bold text-foreground">Generador de Plan de Acción con IA</h2>
               <p className="text-sm text-muted-foreground">
                 Basado en tus caminos: {userData.selectedPathways.join(", ")}
               </p>
@@ -198,7 +224,7 @@ export default function ActionPlanGenerator({ userData, onPlanGenerated }: Actio
         </div>
 
         {!generatedPlan && (
-          <div className="mt-6">
+          <div className="mt-4 pt-4 border-t border-primary/10">
             <Button
               onClick={handleGeneratePlan}
               disabled={isGenerating}
@@ -207,12 +233,12 @@ export default function ActionPlanGenerator({ userData, onPlanGenerated }: Actio
             >
               {isGenerating ? (
                 <>
-                  <span className="animate-spin mr-2">⚙️</span>
+                  <Settings className="animate-spin mr-2 h-5 w-5" />
                   Generando tu plan personalizado con IA...
                 </>
               ) : (
                 <>
-                  <span className="mr-2">✨</span>
+                  <Lightbulb className="mr-2 h-5 w-5" />
                   Generar Plan de Acción
                 </>
               )}
@@ -241,27 +267,27 @@ function ActionPlanDisplay({ plan }: { plan: any }) {
       {/* Header */}
       <Card className="p-6 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950 dark:to-emerald-950 border-2 border-green-200 dark:border-green-800">
         <div className="flex items-center gap-3 mb-4">
-          <span className="text-4xl">✅</span>
+          <CheckCircle2 className="h-10 w-10 text-green-600 dark:text-green-400" />
           <div>
             <h2 className="text-2xl font-bold text-foreground">{plan.title}</h2>
             <p className="text-muted-foreground">{plan.overview}</p>
           </div>
         </div>
         <div className="flex items-center gap-4 text-sm text-muted-foreground">
-          <span>📅 {plan.weeks?.length || 0} semanas</span>
-          <span>💼 {plan.opportunities?.length || 0} oportunidades</span>
-          <span>📚 {plan.resources?.length || 0} recursos</span>
-          <span>⏰ {plan.reminders?.length || 0} recordatorios</span>
+          <span className="flex items-center gap-1"><Calendar className="h-4 w-4" /> {plan.weeks?.length || 0} semanas</span>
+          <span className="flex items-center gap-1"><Briefcase className="h-4 w-4" /> {plan.opportunities?.length || 0} oportunidades</span>
+          <span className="flex items-center gap-1"><BookOpen className="h-4 w-4" /> {plan.resources?.length || 0} recursos</span>
+          <span className="flex items-center gap-1"><Clock className="h-4 w-4" /> {plan.reminders?.length || 0} recordatorios</span>
         </div>
       </Card>
 
       {/* Tabs */}
       <Tabs defaultValue="weeks" className="w-full">
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="weeks">📅 Plan Semanal</TabsTrigger>
-          <TabsTrigger value="opportunities">💼 Oportunidades</TabsTrigger>
-          <TabsTrigger value="resources">📚 Recursos</TabsTrigger>
-          <TabsTrigger value="reminders">⏰ Recordatorios</TabsTrigger>
+          <TabsTrigger value="weeks" className="flex items-center gap-1"><Calendar className="h-4 w-4" /> Plan Semanal</TabsTrigger>
+          <TabsTrigger value="opportunities" className="flex items-center gap-1"><Briefcase className="h-4 w-4" /> Oportunidades</TabsTrigger>
+          <TabsTrigger value="resources" className="flex items-center gap-1"><BookOpen className="h-4 w-4" /> Recursos</TabsTrigger>
+          <TabsTrigger value="reminders" className="flex items-center gap-1"><Clock className="h-4 w-4" /> Recordatorios</TabsTrigger>
         </TabsList>
 
         <TabsContent value="weeks" className="space-y-4">
@@ -289,8 +315,8 @@ function ActionPlanDisplay({ plan }: { plan: any }) {
                     {week.pathwayFocus}
                   </span>
                 </div>
-                <p className="text-sm text-muted-foreground mb-4">
-                  🎯 <strong>Objetivo:</strong> {week.milestone}
+                <p className="text-sm text-muted-foreground mb-4 flex items-center gap-1">
+                  <Target className="h-4 w-4" /> <strong>Objetivo:</strong> {week.milestone}
                 </p>
               </div>
 
@@ -315,7 +341,7 @@ function ActionPlanDisplay({ plan }: { plan: any }) {
                           </span>
                         )}
                         {task.estimatedTime && (
-                          <span className="text-xs text-muted-foreground">⏱️ {task.estimatedTime}</span>
+                          <span className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" /> {task.estimatedTime}</span>
                         )}
                       </div>
                     </div>
@@ -328,7 +354,7 @@ function ActionPlanDisplay({ plan }: { plan: any }) {
           {/* Checkpoints */}
           {plan.checkpoints?.length > 0 && (
             <Card className="p-6 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
-              <h4 className="font-bold text-foreground mb-4">🎯 Checkpoints de Progreso</h4>
+              <h4 className="font-bold text-foreground mb-4 flex items-center gap-2"><Target className="h-5 w-5" /> Checkpoints de Progreso</h4>
               <div className="space-y-3">
                 {plan.checkpoints.map((checkpoint: any, idx: number) => (
                   <div key={idx} className="p-4 bg-white dark:bg-gray-900 rounded-lg">
@@ -352,79 +378,96 @@ function ActionPlanDisplay({ plan }: { plan: any }) {
         </TabsContent>
 
         <TabsContent value="opportunities" className="space-y-4">
-          {plan.opportunities?.map((opp: any, idx: number) => (
-            <Card key={idx} className="p-6">
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-2xl">
-                      {opp.type === "internship" && "💼"}
-                      {opp.type === "course" && "📚"}
-                      {opp.type === "scholarship" && "🎓"}
-                      {opp.type === "summer_camp" && "⛺"}
-                      {opp.type === "competition" && "🏆"}
-                    </span>
-                    <h3 className="text-lg font-bold text-foreground">{opp.title}</h3>
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-2">{opp.provider}</p>
-                </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                  opp.cost === "free" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" :
-                  opp.cost === "scholarship_available" ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100" :
-                  "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100"
-                }`}>
-                  {opp.cost === "free" ? "Gratis" : opp.cost === "scholarship_available" ? "Con Beca" : "Pago"}
-                </span>
-              </div>
-
-              <p className="text-foreground mb-3">{opp.description}</p>
-
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-muted-foreground">🎯 Camino:</span>
-                  <span className="ml-2 font-medium">{opp.pathway}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">📅 Periodo:</span>
-                  <span className="ml-2 font-medium">{opp.applicationPeriod}</span>
-                </div>
-                {opp.deadline && (
+          {plan.opportunities?.map((opp: any, idx: number) => {
+            const getOppIcon = (type: string) => {
+              switch(type) {
+                case "internship": return <Briefcase className="h-6 w-6 text-primary" />
+                case "course": return <BookOpen className="h-6 w-6 text-primary" />
+                case "scholarship": return <Award className="h-6 w-6 text-primary" />
+                case "summer_camp": return <Target className="h-6 w-6 text-primary" />
+                case "competition": return <Award className="h-6 w-6 text-primary" />
+                default: return <Briefcase className="h-6 w-6 text-primary" />
+              }
+            }
+            
+            return (
+              <Card key={idx} className="p-6">
+                <div className="flex items-start justify-between mb-3">
                   <div>
-                    <span className="text-muted-foreground">⏰ Deadline:</span>
-                    <span className="ml-2 font-medium text-red-600 dark:text-red-400">{opp.deadline}</span>
+                    <div className="flex items-center gap-2 mb-2">
+                      {getOppIcon(opp.type)}
+                      <h3 className="text-lg font-bold text-foreground">{opp.title}</h3>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-2">{opp.provider}</p>
+                  </div>
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    opp.cost === "free" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" :
+                    opp.cost === "scholarship_available" ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100" :
+                    "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100"
+                  }`}>
+                    {opp.cost === "free" ? "Gratis" : opp.cost === "scholarship_available" ? "Con Beca" : "Pago"}
+                  </span>
+                </div>
+
+                <p className="text-foreground mb-3">{opp.description}</p>
+
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="flex items-center gap-1">
+                    <Target className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Camino:</span>
+                    <span className="ml-2 font-medium">{opp.pathway}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Periodo:</span>
+                    <span className="ml-2 font-medium">{opp.applicationPeriod}</span>
+                  </div>
+                  {opp.deadline && (
+                    <div className="flex items-center gap-1">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">Deadline:</span>
+                      <span className="ml-2 font-medium text-red-600 dark:text-red-400">{opp.deadline}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1">
+                    <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Aplicar en:</span>
+                    <span className="ml-2 font-medium">Semana {opp.recommendedWeek}</span>
+                  </div>
+                </div>
+
+                {opp.url && (
+                  <div className="mt-4">
+                    <Button variant="outline" size="sm" asChild>
+                      <a href={opp.url} target="_blank" rel="noopener noreferrer">
+                        Ver más información →
+                      </a>
+                    </Button>
                   </div>
                 )}
-                <div>
-                  <span className="text-muted-foreground">✅ Aplicar en:</span>
-                  <span className="ml-2 font-medium">Semana {opp.recommendedWeek}</span>
-                </div>
-              </div>
-
-              {opp.url && (
-                <div className="mt-4">
-                  <Button variant="outline" size="sm" asChild>
-                    <a href={opp.url} target="_blank" rel="noopener noreferrer">
-                      Ver más información →
-                    </a>
-                  </Button>
-                </div>
-              )}
-            </Card>
-          ))}
+              </Card>
+            )
+          })}
         </TabsContent>
 
         <TabsContent value="resources" className="space-y-4">
           <div className="grid gap-4">
-            {plan.resources?.map((resource: any, idx: number) => (
-              <Card key={idx} className="p-5">
-                <div className="flex items-start gap-4">
-                  <span className="text-3xl">
-                    {resource.type === "book" && "📖"}
-                    {resource.type === "platform" && "💻"}
-                    {resource.type === "community" && "👥"}
-                    {resource.type === "tool" && "🛠️"}
-                    {resource.type === "course" && "🎓"}
-                  </span>
+            {plan.resources?.map((resource: any, idx: number) => {
+              const getResourceIcon = (type: string) => {
+                switch(type) {
+                  case "book": return <BookOpen className="h-8 w-8 text-primary" />
+                  case "platform": return <Laptop className="h-8 w-8 text-primary" />
+                  case "community": return <Target className="h-8 w-8 text-primary" />
+                  case "tool": return <Settings className="h-8 w-8 text-primary" />
+                  case "course": return <Award className="h-8 w-8 text-primary" />
+                  default: return <BookOpen className="h-8 w-8 text-primary" />
+                }
+              }
+              
+              return (
+                <Card key={idx} className="p-5">
+                  <div className="flex items-start gap-4">
+                    {getResourceIcon(resource.type)}
                   <div className="flex-1">
                     <div className="flex items-start justify-between mb-2">
                       <h4 className="font-bold text-foreground">{resource.title}</h4>
@@ -438,8 +481,8 @@ function ActionPlanDisplay({ plan }: { plan: any }) {
                     </div>
                     <p className="text-sm text-muted-foreground mb-2">{resource.description}</p>
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      <span>🎯 {resource.pathway}</span>
-                      <span>⏰ {resource.timing}</span>
+                      <span className="flex items-center gap-1"><Target className="h-3 w-3" /> {resource.pathway}</span>
+                      <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {resource.timing}</span>
                     </div>
                     {resource.url && (
                       <Button variant="link" size="sm" className="px-0 h-auto mt-2" asChild>
@@ -451,24 +494,33 @@ function ActionPlanDisplay({ plan }: { plan: any }) {
                   </div>
                 </div>
               </Card>
-            ))}
+            )
+          })}
           </div>
         </TabsContent>
 
         <TabsContent value="reminders" className="space-y-4">
-          {plan.reminders?.map((reminder: any, idx: number) => (
-            <Card key={idx} className="p-4">
-              <div className="flex items-start gap-3">
-                <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-xl ${
-                  reminder.priority === "high" ? "bg-red-100 dark:bg-red-900" :
-                  reminder.priority === "medium" ? "bg-yellow-100 dark:bg-yellow-900" :
-                  "bg-green-100 dark:bg-green-900"
-                }`}>
-                  {reminder.type === "checkpoint" && "🎯"}
-                  {reminder.type === "deadline" && "⏰"}
-                  {reminder.type === "application" && "📝"}
-                  {reminder.type === "review" && "📊"}
-                </div>
+          {plan.reminders?.map((reminder: any, idx: number) => {
+            const getReminderIcon = (type: string) => {
+              switch(type) {
+                case "checkpoint": return <Target className="h-6 w-6" />
+                case "deadline": return <Clock className="h-6 w-6" />
+                case "application": return <CheckCircle2 className="h-6 w-6" />
+                case "review": return <TrendingUp className="h-6 w-6" />
+                default: return <Clock className="h-6 w-6" />
+              }
+            }
+            
+            return (
+              <Card key={idx} className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                    reminder.priority === "high" ? "bg-red-100 dark:bg-red-900" :
+                    reminder.priority === "medium" ? "bg-yellow-100 dark:bg-yellow-900" :
+                    "bg-green-100 dark:bg-green-900"
+                  }`}>
+                    {getReminderIcon(reminder.type)}
+                  </div>
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-1">
                     <h4 className="font-bold text-foreground">{reminder.title}</h4>
@@ -480,7 +532,8 @@ function ActionPlanDisplay({ plan }: { plan: any }) {
                 </div>
               </div>
             </Card>
-          ))}
+          )
+        })}
         </TabsContent>
       </Tabs>
     </div>

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Settings as SettingsIcon } from "lucide-react"
+import { Settings as SettingsIcon, Target, CheckCircle2, Lock } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,7 @@ import ActionPlanGenerator from "./action-plan-generator"
 import PathwayCards from "./pathway-cards"
 import OpportunitiesByPathway from "./opportunities-by-pathway"
 import RemindersSection from "./reminders-section"
+import PathwayDetailDialog from "./pathway-detail-dialog"
 import {
   createEmptyOpenResponses,
   createEmptyPreferenceResponses,
@@ -122,6 +123,8 @@ export default function Dashboard({ showOnboardingReminder, onResumeOnboarding }
   const [onboardingData, setOnboardingData] = useState<SavedOnboardingData | null>(null)
   const [settingsPreferences, setSettingsPreferences] = useState<DashboardSettings>(defaultDashboardSettings)
   const [settingsLoaded, setSettingsLoaded] = useState(false)
+  const [pathwayDialogOpen, setPathwayDialogOpen] = useState(false)
+  const [selectedPathwayForDialog, setSelectedPathwayForDialog] = useState<string | null>(null)
 
   useEffect(() => {
     // Load onboarding data from localStorage
@@ -165,6 +168,39 @@ export default function Dashboard({ showOnboardingReminder, onResumeOnboarding }
     }
 
     setSettingsLoaded(true)
+
+    // Load action plan - try Supabase first, then localStorage
+    const loadActionPlan = async () => {
+      try {
+        // Try to load from Supabase
+        const response = await fetch('/api/action-plan/load')
+        const result = await response.json()
+        
+        if (result.success && result.plan) {
+          console.log('[Dashboard] Action plan loaded from Supabase')
+          setActionPlan(result.plan)
+          // Also update localStorage
+          localStorage.setItem("actionPlan", JSON.stringify(result.plan))
+          return
+        }
+      } catch (error) {
+        console.warn('[Dashboard] Could not load from Supabase, trying localStorage:', error)
+      }
+
+      // Fall back to localStorage
+      const savedActionPlan = localStorage.getItem("actionPlan")
+      if (savedActionPlan) {
+        try {
+          const parsedPlan = JSON.parse(savedActionPlan)
+          setActionPlan(parsedPlan)
+          console.log('[Dashboard] Action plan loaded from localStorage')
+        } catch (error) {
+          console.error("Error parsing saved action plan", error)
+        }
+      }
+    }
+
+    loadActionPlan()
   }, [])
 
   useEffect(() => {
@@ -196,12 +232,13 @@ export default function Dashboard({ showOnboardingReminder, onResumeOnboarding }
             {userInfo?.schoolType} • {userInfo?.schoolName}
           </p>
           {userInfo?.completedAt && (
-            <p className="text-xs text-muted-foreground mt-1">
-              ✓ Perfil completado el {new Date(userInfo.completedAt).toLocaleDateString('es-ES', {
+            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+              <CheckCircle2 className="h-3 w-3" />
+              <span>Perfil completado el {new Date(userInfo.completedAt).toLocaleDateString('es-ES', {
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric'
-              })}
+              })}</span>
             </p>
           )}
         </div>
@@ -307,32 +344,29 @@ export default function Dashboard({ showOnboardingReminder, onResumeOnboarding }
           <Card className="p-6 mb-8 bg-gradient-to-r from-primary/10 via-primary/5 to-background border-2 border-primary/20">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <span className="text-3xl">🎯</span>
+                <Target className="h-8 w-8 text-primary" />
                 <div>
                   <h2 className="text-2xl font-bold text-foreground">Tus Caminos Elegidos</h2>
                   <p className="text-muted-foreground text-sm">Los objetivos que definiste para tu futuro</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-100 rounded-full text-xs font-medium">
-                <span>✓</span>
-                <span>Analizado por IA</span>
-              </div>
             </div>
             <div className="flex flex-wrap gap-3 mb-4">
               {selectedPathways.map((pathway, index) => (
-                <div key={pathway} className="flex items-center gap-2 px-4 py-2 bg-background rounded-lg border border-primary/30 shadow-sm">
+                <button
+                  key={pathway}
+                  onClick={() => {
+                    setSelectedPathwayForDialog(pathway)
+                    setPathwayDialogOpen(true)
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-background rounded-lg border border-primary/30 shadow-sm hover:border-primary hover:shadow-md transition-all cursor-pointer"
+                >
                   <span className="flex items-center justify-center w-6 h-6 bg-primary text-primary-foreground rounded-full font-bold text-xs">
                     {index + 1}
                   </span>
                   <span className="font-medium text-foreground">{pathway}</span>
-                </div>
+                </button>
               ))}
-            </div>
-            <div className="mt-4 pt-4 border-t border-primary/10">
-              <p className="text-xs text-muted-foreground flex items-center gap-2">
-                <span>🔒</span>
-                <span>Tu perfil ha sido analizado por IA y guardado permanentemente. Todas las oportunidades y recursos están personalizados para estos caminos.</span>
-              </p>
             </div>
           </Card>
         </>
@@ -359,7 +393,15 @@ export default function Dashboard({ showOnboardingReminder, onResumeOnboarding }
       {/* Pathway Recommendations Cards */}
       {actionPlan && (
         <div className="mb-12">
-          <PathwayCards />
+          <PathwayCards 
+            userResponses={onboardingData ? {
+              openResponses: onboardingData.openResponses,
+              preferenceResponses: onboardingData.preferenceResponses,
+              selectedPathways: onboardingData.selectedPathways,
+              schoolType: onboardingData.schoolType,
+              currentYear: onboardingData.currentYear,
+            } : undefined}
+          />
         </div>
       )}
 
@@ -397,6 +439,27 @@ export default function Dashboard({ showOnboardingReminder, onResumeOnboarding }
             </p>
           </Card>
         ))}
+
+      {/* Pathway Detail Dialog */}
+      {selectedPathwayForDialog && (
+        <PathwayDetailDialog
+          pathway={{
+            title: selectedPathwayForDialog,
+            description: `Explora oportunidades y actividades personalizadas para ${selectedPathwayForDialog}`,
+            icon: "Target",
+            duration: "Variable según tu progreso"
+          }}
+          open={pathwayDialogOpen}
+          onOpenChange={setPathwayDialogOpen}
+          userResponses={onboardingData ? {
+            openResponses: onboardingData.openResponses,
+            preferenceResponses: onboardingData.preferenceResponses,
+            selectedPathways: onboardingData.selectedPathways,
+            schoolType: onboardingData.schoolType,
+            currentYear: onboardingData.currentYear,
+          } : undefined}
+        />
+      )}
 
     </div>
   )
