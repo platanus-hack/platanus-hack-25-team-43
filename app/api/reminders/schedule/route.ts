@@ -1,42 +1,56 @@
+import { requireAuth } from "@/lib/auth-middleware"
+import { getSupabaseServerClient } from "@/lib/supabase-server"
+import { NextResponse } from "next/server"
+
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { phoneNumber, actionPlan } = body
-
-    if (!phoneNumber || !actionPlan) {
-      return Response.json({ success: false, error: "Missing required fields" }, { status: 400 })
+    // Authenticate user
+    const auth = await requireAuth(request)
+    if (!auth.authorized || !auth.user) {
+      return auth.response
     }
 
-    const reminders = JSON.parse(localStorage.getItem("whatsappReminders") || "[]")
+    const body = await request.json()
+    const { reminderId, newDate } = body
 
-    // Create a reminder for each week in the action plan
-    const newReminders = actionPlan.weeks.map((week: any, index: number) => ({
-      id: Math.random().toString(36).substr(2, 9),
-      phoneNumber,
-      weekNumber: week.week,
-      tasks: week.tasks,
-      createdAt: new Date().toISOString(),
-      scheduledFor: new Date(Date.now() + (index + 1) * 7 * 24 * 60 * 60 * 1000).toISOString(),
-      sent: false,
-      message: `Week ${week.week} - ${week.title}: ${week.milestone}`,
-    }))
+    if (!reminderId || !newDate) {
+      return NextResponse.json(
+        { success: false, error: "Missing required fields" },
+        { status: 400 }
+      )
+    }
 
-    reminders.push(...newReminders)
-    localStorage.setItem("whatsappReminders", JSON.stringify(reminders))
+    const supabase = await getSupabaseServerClient()
 
-    return Response.json({
+    // Update reminder schedule
+    const { data, error } = await supabase
+      .from("reminders")
+      .update({ scheduled_for: newDate })
+      .eq("id", reminderId)
+      .eq("user_id", auth.user.id) // Ensure user owns this reminder
+      .select()
+      .single()
+
+    if (error) {
+      console.error("[reminders] Error updating reminder:", error)
+      return NextResponse.json(
+        { success: false, error: "Failed to update reminder" },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({
       success: true,
-      reminders: newReminders,
-      count: newReminders.length,
+      reminder: data,
     })
   } catch (error) {
-    console.error("[v0] Error scheduling reminders:", error)
-    return Response.json(
+    console.error("[reminders] Error updating reminder:", error)
+    return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to schedule reminders",
+        error: error instanceof Error ? error.message : "Failed to update reminder",
       },
-      { status: 500 },
+      { status: 500 }
     )
   }
 }

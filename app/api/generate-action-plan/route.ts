@@ -17,8 +17,8 @@
  * @input {string} schoolInfo.schoolType - "colegio" or "universidad"
  * @input {string} schoolInfo.schoolName - Institution name
  * @input {number} schoolInfo.currentYear - Current academic year
- * @input {string} motivation - Career motivation
- * @input {string} goals - 3-5 year goals
+ * @input {Object} openResponses - Map of open-ended reflections
+ * @input {Object} preferenceResponses - Map of multiple-choice preferences
  * 
  * @output {Object} response
  * @output {boolean} success - Whether generation succeeded
@@ -46,8 +46,25 @@
  *     "schoolName": "Universidad de los Andes",
  *     "currentYear": 2
  *   },
- *   "motivation": "Tech for social good",
- *   "goals": "Work at international startup"
+ *   "openResponses": {
+ *     "futureVision": "Impactar salud pública con analítica de datos",
+ *     "dailyFeeling": "Propósito y emoción cada día",
+ *     "problemEnjoyment": "Retos complejos entre ciencia y comunidad",
+ *     "skillFocus": "Storytelling y liderazgo técnico",
+ *     "oneWeekJob": "Diseñar estrategias como epidemióloga urbana"
+ *   },
+ *   "preferenceResponses": {
+ *     "consideredCollege": "Sí",
+ *     "wantsCollege": "Sí",
+ *     "environmentComfort": "Al aire libre",
+ *     "workStyle": "Una mezcla de ambos",
+ *     "dayPreference": "Algo diferente cada día",
+ *     "workPace": "Una mezcla según la tarea",
+ *     "taskComfort": "Tareas donde puedes sumar tus ideas",
+ *     "activityPreference": "Una combinación de ambas",
+ *     "technologyComfort": "Me siento cómodo/a y hasta lo disfruto",
+ *     "communicationStyle": "Hablar con grupos pequeños"
+ *   }
  * }
  * 
  * // Response
@@ -77,11 +94,21 @@
 
 import { anthropic } from "@ai-sdk/anthropic"
 import { generateText } from "ai"
+import { OPEN_ENDED_QUESTIONS, PREFERENCE_QUESTIONS } from "@/lib/onboarding-questions"
+import { requireAuth } from "@/lib/auth-middleware"
 
 export async function POST(request: Request) {
   try {
+    // Authenticate user
+    const auth = await requireAuth(request)
+    if (!auth.authorized || !auth.user) {
+      return auth.response
+    }
+
     const body = await request.json()
-    const { name, selectedPathways, schoolInfo, motivation, goals } = body
+    const { name, selectedPathways, schoolInfo } = body
+    const openResponses: Record<string, string> = body.openResponses ?? {}
+    const preferenceResponses: Record<string, string> = body.preferenceResponses ?? {}
 
     // Check if Anthropic API key is configured
     if (!process.env.ANTHROPIC_API_KEY) {
@@ -95,6 +122,16 @@ export async function POST(request: Request) {
       )
     }
 
+    const openResponsesSummary = OPEN_ENDED_QUESTIONS.map((question) => {
+      const answer = openResponses[question.id]?.trim()
+      return `- ${question.label}: ${answer && answer.length > 0 ? answer : "Sin respuesta"}`
+    }).join("\n")
+
+    const preferenceSummary = PREFERENCE_QUESTIONS.map((question) => {
+      const answer = preferenceResponses[question.id]?.trim()
+      return `- ${question.question}: ${answer && answer.length > 0 ? answer : "Sin respuesta"}`
+    }).join("\n")
+
     // Create detailed prompt for action plan generation
     const prompt = `
 Eres un asesor de carrera experto creando un plan de acción personalizado de 12 semanas (3 meses) para ${name}.
@@ -103,8 +140,10 @@ INFORMACIÓN DEL ESTUDIANTE:
 - Nombre: ${name}
 - Educación: ${schoolInfo?.schoolType === "colegio" ? "Colegio" : "Universidad"} - ${schoolInfo?.schoolName}
 - Año actual: ${schoolInfo?.currentYear}
-- Motivación: ${motivation}
-- Objetivos (3-5 años): ${goals}
+- Visión personal (respuestas abiertas):
+${openResponsesSummary}
+- Preferencias y estilo de aprendizaje:
+${preferenceSummary}
 
 CAMINOS ELEGIDOS:
 ${selectedPathways.map((p: string, i: number) => `${i + 1}. ${p}`).join("\n")}
@@ -197,7 +236,7 @@ IMPORTANTE:
 - Enfócate en recursos accesibles desde LATAM
     `.trim()
 
-    console.log("[v0] Generating action plan with Claude...")
+    console.warn("[v0] Generating action plan with Claude...")
 
     const { text } = await generateText({
       model: anthropic("claude-3-haiku-20240307"),
@@ -219,7 +258,7 @@ IMPORTANTE:
     plan.createdAt = new Date().toISOString()
     plan.studentName = name
 
-    console.log("[v0] Action plan generated successfully:", {
+    console.warn("[v0] Action plan generated successfully:", {
       weeks: plan.weeks?.length,
       opportunities: plan.opportunities?.length,
       resources: plan.resources?.length,

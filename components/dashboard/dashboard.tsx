@@ -1,14 +1,85 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { Settings as SettingsIcon } from "lucide-react"
 import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import ActionPlanDisplay from "./action-plan-display"
 import ActionPlanGenerator from "./action-plan-generator"
 import PathwayCards from "./pathway-cards"
 import OpportunitiesByPathway from "./opportunities-by-pathway"
 import RemindersSection from "./reminders-section"
 import { logoutUser } from "@/lib/auth-client"
+import { getSupabaseBrowserClient } from "@/lib/supabase-browser"
+import {
+  createEmptyOpenResponses,
+  createEmptyPreferenceResponses,
+  type OpenEndedResponses,
+  type PreferenceResponses,
+} from "@/lib/onboarding-questions"
+
+type DashboardSettings = {
+  whatsappReminders: boolean
+  weeklySummaryEmails: boolean
+  shareProgressWithMentor: boolean
+}
+
+const defaultDashboardSettings: DashboardSettings = {
+  whatsappReminders: true,
+  weeklySummaryEmails: false,
+  shareProgressWithMentor: false,
+}
+
+type SavedGradeEntry = {
+  subject: string
+  grade: number
+}
+
+type SavedRecommendedPathway = {
+  name: string
+  rationale?: string
+  actionSteps?: string[]
+  timeline?: string
+}
+
+type SavedOnboardingData = {
+  name?: string
+  email?: string
+  phoneNumber?: string
+  schoolType?: "colegio" | "universidad"
+  schoolName?: string
+  currentYear?: number
+  motivation?: string
+  goals?: string
+  grades?: SavedGradeEntry[]
+  selectedPathways?: string[]
+  customTracks?: string[]
+  recommendedPathways?: SavedRecommendedPathway[]
+  completedAt?: string
+  permanent?: boolean
+  openResponses?: OpenEndedResponses
+  preferenceResponses?: PreferenceResponses
+}
+
+const withResponseDefaults = (payload?: SavedOnboardingData | null): SavedOnboardingData | null => {
+  if (!payload) {
+    return null
+  }
+
+  return {
+    ...payload,
+    openResponses: {
+      ...createEmptyOpenResponses(),
+      ...(payload.openResponses ?? {}),
+    },
+    preferenceResponses: {
+      ...createEmptyPreferenceResponses(),
+      ...(payload.preferenceResponses ?? {}),
+    },
+  }
+}
 
 interface ActionPlan {
   id: string
@@ -41,54 +112,194 @@ interface ActionPlan {
 
 interface DashboardProps {
   onLogout: () => void
+  showOnboardingReminder?: boolean
+  onResumeOnboarding?: () => void
 }
 
-export default function Dashboard({ onLogout }: DashboardProps) {
+export default function Dashboard({ onLogout, showOnboardingReminder, onResumeOnboarding }: DashboardProps) {
   const [actionPlan, setActionPlan] = useState<ActionPlan | null>(null)
   const [showPlan, setShowPlan] = useState(false)
   const [userInfo, setUserInfo] = useState<{ name: string; schoolName: string; schoolType: string; completedAt?: string } | null>(null)
   const [phoneNumber, setPhoneNumber] = useState<string | undefined>()
   const [selectedPathways, setSelectedPathways] = useState<string[]>([])
-  const [onboardingData, setOnboardingData] = useState<any>(null)
+  const [onboardingData, setOnboardingData] = useState<SavedOnboardingData | null>(null)
+  const [settingsPreferences, setSettingsPreferences] = useState<DashboardSettings>(defaultDashboardSettings)
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+
+  const supabase = getSupabaseBrowserClient()
 
   useEffect(() => {
-    // Load saved data from localStorage
-    const savedPlan = localStorage.getItem("actionPlan")
-    const savedOnboardingData = localStorage.getItem("onboardingData")
-    const savedPhoneNumber = localStorage.getItem("whatsappPhoneNumber")
+    // Load settings from localStorage (user-preference, not user-specific data)
+    const savedSettings = localStorage.getItem("dashboardSettings")
 
-    if (savedOnboardingData) {
-      const data = JSON.parse(savedOnboardingData)
-      setOnboardingData(data)
-      setUserInfo({
-        name: data.name,
-        schoolName: data.schoolName,
-        schoolType: data.schoolType === "colegio" ? "Colegio" : "Universidad",
-        completedAt: data.completedAt,
-      })
-      // Extract selected pathways
-      if (data.selectedPathways) {
-        setSelectedPathways(data.selectedPathways)
+    if (savedSettings) {
+      try {
+        const parsedSettings = JSON.parse(savedSettings)
+        setSettingsPreferences((prev) => ({
+          ...prev,
+          ...parsedSettings,
+        }))
+      } catch (error) {
+        console.error("Error parsing saved dashboard settings", error)
       }
     }
 
-    if (savedPlan && savedPlan !== "{}") {
-      const plan = JSON.parse(savedPlan)
-      if (plan.weeks) {
-        setActionPlan(plan)
-      }
-    }
-
-    if (savedPhoneNumber) {
-      setPhoneNumber(savedPhoneNumber)
-    }
+    setSettingsLoaded(true)
+    
+    // Note: User-specific data (onboarding, action plans) is now loaded exclusively 
+    // from Supabase in the syncRemoteState effect below to ensure data isolation per user
   }, [])
+
+  useEffect(() => {
+    if (!settingsLoaded) return
+    localStorage.setItem("dashboardSettings", JSON.stringify(settingsPreferences))
+  }, [settingsLoaded, settingsPreferences])
+
+  useEffect(() => {
+    if (!supabase || !userEmail) return
+    let isMounted = true
+
+    const syncRemoteState = async () => {
+      const [{ data: remoteOnboarding, error: onboardingError }, { data: remoteSettings, error: settingsError }] = await Promise.all([
+        supabase
+          .from("onboarding")
+          .select("*")
+          .eq("email", userEmail)
+          .maybeSingle(),
+        supabase
+          .from("user_settings")
+          .select("whatsapp_reminders, weekly_summary_emails, share_progress_with_mentor")
+          .eq("email", userEmail)
+          .maybeSingle(),
+      ])
+
+      if (onboardingError && onboardingError.code !== "PGRST116") {
+        console.error("Error fetching onboarding from Supabase", onboardingError)
+      }
+
+      if (remoteOnboarding && isMounted) {
+        const payload: SavedOnboardingData =
+          remoteOnboarding.profile_payload ??
+          {
+            name: remoteOnboarding.name ?? undefined,
+            email: remoteOnboarding.email ?? undefined,
+            phoneNumber: remoteOnboarding.phone_number ?? undefined,
+            schoolType: remoteOnboarding.school_type ?? undefined,
+            schoolName: remoteOnboarding.school_name ?? undefined,
+            currentYear: remoteOnboarding.current_year ?? undefined,
+            motivation: remoteOnboarding.motivation ?? undefined,
+            goals: remoteOnboarding.goals ?? undefined,
+            grades: remoteOnboarding.grades ?? [],
+            selectedPathways: remoteOnboarding.selected_pathways ?? [],
+            customTracks: remoteOnboarding.custom_tracks ?? [],
+            recommendedPathways: remoteOnboarding.recommended_pathways ?? [],
+            completedAt: remoteOnboarding.completed_at ?? undefined,
+            permanent: remoteOnboarding.permanent ?? undefined,
+          }
+
+        const normalizedPayload = withResponseDefaults(payload)
+
+        if (normalizedPayload) {
+          setOnboardingData(normalizedPayload)
+          setUserInfo({
+            name: normalizedPayload.name ?? "",
+            schoolName: normalizedPayload.schoolName ?? "",
+            schoolType: normalizedPayload.schoolType === "universidad" ? "Universidad" : "Colegio",
+            completedAt: normalizedPayload.completedAt,
+          })
+          if (normalizedPayload.selectedPathways?.length) {
+            setSelectedPathways(normalizedPayload.selectedPathways)
+          }
+          if (normalizedPayload.phoneNumber) {
+            setPhoneNumber(normalizedPayload.phoneNumber)
+            localStorage.setItem("whatsappPhoneNumber", normalizedPayload.phoneNumber)
+          }
+          localStorage.setItem("onboardingData", JSON.stringify(normalizedPayload))
+          localStorage.setItem("onboardingComplete", "true")
+        }
+      }
+
+      if (settingsError && settingsError.code !== "PGRST116") {
+        console.error("Error fetching dashboard settings from Supabase", settingsError)
+      }
+
+      if (remoteSettings && isMounted) {
+        const normalized: DashboardSettings = {
+          whatsappReminders: remoteSettings.whatsapp_reminders ?? defaultDashboardSettings.whatsappReminders,
+          weeklySummaryEmails: remoteSettings.weekly_summary_emails ?? defaultDashboardSettings.weeklySummaryEmails,
+          shareProgressWithMentor: remoteSettings.share_progress_with_mentor ?? defaultDashboardSettings.shareProgressWithMentor,
+        }
+        setSettingsPreferences(normalized)
+        localStorage.setItem("dashboardSettings", JSON.stringify(normalized))
+      } else if (!remoteSettings && userEmail) {
+        const { error: insertError } = await supabase.from("user_settings").insert({
+          email: userEmail,
+          whatsapp_reminders: defaultDashboardSettings.whatsappReminders,
+          weekly_summary_emails: defaultDashboardSettings.weeklySummaryEmails,
+          share_progress_with_mentor: defaultDashboardSettings.shareProgressWithMentor,
+        })
+        if (insertError) {
+          console.error("Error creating default dashboard settings", insertError)
+        }
+      }
+    }
+
+    void syncRemoteState()
+
+    return () => {
+      isMounted = false
+    }
+  }, [supabase, userEmail])
+
+  // Placeholder for future settings persistence
+  // const persistSettingsToSupabase = useCallback(
+  //   async (nextSettings: DashboardSettings) => {
+  //     if (!supabase || !userEmail) return
+  //     const { error } = await supabase.from("user_settings").upsert({
+  //       email: userEmail,
+  //       whatsapp_reminders: nextSettings.whatsappReminders,
+  //       weekly_summary_emails: nextSettings.weeklySummaryEmails,
+  //       share_progress_with_mentor: nextSettings.shareProgressWithMentor,
+  //       updated_at: new Date().toISOString(),
+  //     })
+  //     if (error) {
+  //       console.error("Error updating settings in Supabase", error)
+  //     }
+  //   },
+  //   [supabase, userEmail],
+  // )
 
   const handleLogout = () => {
     logoutUser()
     onLogout()
   }
 
+  // Placeholder for future settings changes
+  // const handleSettingChange = (key: keyof DashboardSettings, value: boolean) => {
+  //   setSettingsPreferences((prev) => {
+  //     const updated = {
+  //       ...prev,
+  //       [key]: value,
+  //     }
+  //     void persistSettingsToSupabase(updated)
+  //     return updated
+  //   })
+  // }
+
+  const dialogPhoneNumber = onboardingData?.phoneNumber ?? phoneNumber ?? "—"
+  const formattedSchoolType =
+    onboardingData?.schoolType === "universidad"
+      ? "Universidad"
+      : onboardingData?.schoolType === "colegio"
+        ? "Colegio"
+        : userInfo?.schoolType ?? "Sin definir"
+  const institutionLabel =
+    formattedSchoolType === "Universidad"
+      ? "Universidad"
+      : formattedSchoolType === "Colegio"
+        ? "Colegio"
+        : "Institución"
   return (
     <div className="max-w-7xl mx-auto p-4">
       {/* Header with Logout */}
@@ -108,10 +319,104 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             </p>
           )}
         </div>
-        <Button variant="outline" onClick={handleLogout}>
-          Cerrar Sesión
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleLogout}>
+            Cerrar Sesión
+          </Button>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button className="flex items-center gap-2" variant="default">
+                <SettingsIcon className="h-4 w-4" />
+                Configuración
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-3xl">
+              <DialogHeader>
+                <DialogTitle>Configuración rápida</DialogTitle>
+                <DialogDescription>Ajusta cómo quieres recibir tus recordatorios y reportes.</DialogDescription>
+              </DialogHeader>
+
+              {!onboardingData ? (
+                <Card className="p-6 border-dashed bg-muted/40">
+                  <p className="text-sm text-muted-foreground">
+                    Completa la primera pantalla del onboarding para sincronizar esta información.
+                  </p>
+                </Card>
+              ) : (
+                <div className="space-y-6">
+                  <Card className="p-5 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">Datos del perfil</p>
+                        <p className="text-xs text-muted-foreground">Sincronizados desde la primera pantalla del onboarding.</p>
+                      </div>
+                      {onboardingData.permanent && (
+                        <Badge variant="secondary" className="text-[11px]">
+                          Perfil permanente
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">Nombre</span>
+                        <span className="font-medium text-right">{onboardingData.name ?? "—"}</span>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">Correo</span>
+                        <span className="font-medium text-right break-all">{onboardingData.email ?? userEmail ?? "—"}</span>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">WhatsApp</span>
+                        <span className="font-medium text-right">{dialogPhoneNumber}</span>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">Tipo de institución</span>
+                        <span className="font-medium text-right">{formattedSchoolType}</span>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">{institutionLabel}</span>
+                        <span className="font-medium text-right">
+                          {onboardingData.schoolName ?? userInfo?.schoolName ?? "Sin registrar"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">Año actual</span>
+                        <span className="font-medium text-right">
+                          {onboardingData?.currentYear ? `Año ${onboardingData.currentYear}` : "No indicado"}
+                        </span>
+                      </div>
+                    </div>
+                  </Card>
+
+                  {onResumeOnboarding && (
+                    <Button className="w-full" variant="outline" onClick={onResumeOnboarding}>
+                      Retomar onboarding
+                    </Button>
+                  )}
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
+
+      {showOnboardingReminder && (
+        <Card className="p-4 mb-8 border border-dashed border-primary/30 bg-primary/5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="font-semibold text-foreground">Te falta completar tu onboarding</p>
+              <p className="text-sm text-muted-foreground">
+                Completa tu perfil para desbloquear recomendaciones, planes de acción y recordatorios personalizados.
+              </p>
+            </div>
+            {onResumeOnboarding && (
+              <Button className="w-full md:w-auto" onClick={onResumeOnboarding}>
+                Reanudar onboarding
+              </Button>
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* Selected Pathways Banner */}
       {selectedPathways.length > 0 && (
@@ -160,8 +465,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               schoolType: onboardingData.schoolType,
               schoolName: onboardingData.schoolName,
               currentYear: onboardingData.currentYear,
-              motivation: onboardingData.motivation,
-              goals: onboardingData.goals,
+              openResponses: onboardingData.openResponses ?? createEmptyOpenResponses(),
+              preferenceResponses: onboardingData.preferenceResponses ?? createEmptyPreferenceResponses(),
             }}
             onPlanGenerated={(plan) => setActionPlan(plan)}
           />
@@ -196,22 +501,20 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       )}
 
       {/* Reminders Section */}
-      {actionPlan && (
-        <div className="mb-8">
-          <RemindersSection phoneNumber={phoneNumber} actionPlan={actionPlan} />
-        </div>
-      )}
+      {actionPlan &&
+        (settingsPreferences.whatsappReminders ? (
+          <div className="mb-8">
+            <RemindersSection phoneNumber={phoneNumber} actionPlan={actionPlan} />
+          </div>
+        ) : (
+          <Card className="mb-8 p-6">
+            <h3 className="text-lg font-semibold mb-2">Recordatorios desactivados</h3>
+            <p className="text-sm text-muted-foreground">
+              Activa los recordatorios por WhatsApp desde el panel de Configuración para programar mensajes automáticos.
+            </p>
+          </Card>
+        ))}
 
-      {!actionPlan && (
-        <Card className="p-8 text-center mb-8">
-          <div className="text-6xl mb-4">📊</div>
-          <h3 className="text-xl font-bold text-foreground mb-2">Tu Perfil Está Completo</h3>
-          <p className="text-muted-foreground mb-4">Tu información ha sido analizada y guardada exitosamente</p>
-          <p className="text-sm text-muted-foreground">
-            Explora las oportunidades y recursos personalizados para tus caminos elegidos
-          </p>
-        </Card>
-      )}
     </div>
   )
 }

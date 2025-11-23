@@ -3,6 +3,7 @@ export async function scheduleReminders(phoneNumber: string, actionPlan: any) {
     const response = await fetch("/api/reminders/schedule", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include", // Include cookies for authentication
       body: JSON.stringify({ phoneNumber, actionPlan }),
     })
 
@@ -20,7 +21,9 @@ export async function scheduleReminders(phoneNumber: string, actionPlan: any) {
 
 export async function getReminders(phoneNumber: string) {
   try {
-    const response = await fetch(`/api/reminders/list?phoneNumber=${encodeURIComponent(phoneNumber)}`)
+    const response = await fetch(`/api/reminders/list?phoneNumber=${encodeURIComponent(phoneNumber)}`, {
+      credentials: "include", // Include cookies for authentication
+    })
 
     if (!response.ok) {
       throw new Error("Failed to fetch reminders")
@@ -39,6 +42,7 @@ export async function createReminder(phoneNumber: string, weekNumber: number, ta
     const response = await fetch("/api/reminders/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include", // Include cookies for authentication
       body: JSON.stringify({ phoneNumber, weekNumber, tasks }),
     })
 

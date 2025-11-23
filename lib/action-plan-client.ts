@@ -1,3 +1,5 @@
+import type { OpenEndedResponses, PreferenceResponses } from "@/lib/onboarding-questions"
+
 export async function generateActionPlan(data: {
   name: string
   selectedPathways: string[]
@@ -6,13 +8,14 @@ export async function generateActionPlan(data: {
     schoolName: string
     currentYear: number
   }
-  motivation: string
-  goals: string
+  openResponses: OpenEndedResponses
+  preferenceResponses: PreferenceResponses
 }) {
   try {
     const response = await fetch("/api/generate-action-plan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include", // Include cookies for authentication
       body: JSON.stringify(data),
     })
 

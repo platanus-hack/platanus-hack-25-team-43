@@ -1,11 +1,22 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { analyzeStudentResponses } from "@/lib/llm-client"
+import { getSupabaseBrowserClient } from "@/lib/supabase-browser"
+import OpenEnded from "./open-ended"
+import MultipleChoice from "./multiple-choice"
+import {
+  OPEN_ENDED_QUESTIONS,
+  PREFERENCE_QUESTIONS,
+  createEmptyOpenResponses,
+  createEmptyPreferenceResponses,
+  type OpenEndedResponses,
+  type PreferenceResponses,
+} from "@/lib/onboarding-questions"
 
-type OnboardingStep = "schoolInfo" | "motivation" | "goals" | "grades" | "pathways" | "selection" | "summary"
+type OnboardingStep = "schoolInfo" | "knowledge" | "preferences" | "grades" | "pathways" | "selection" | "summary"
 
 interface GradeEntry {
   subject: string
@@ -14,11 +25,13 @@ interface GradeEntry {
 
 interface OnboardingData {
   name: string
+  email: string
+  phoneNumber: string
   schoolType: "colegio" | "universidad"
   schoolName: string
   currentYear: number
-  motivation: string
-  goals: string
+  openResponses: OpenEndedResponses
+  preferenceResponses: PreferenceResponses
   grades: GradeEntry[]
   selectedPathways: string[]
   customTracks: string[]
@@ -33,43 +46,76 @@ interface PathwayData {
 
 interface OnboardingModalProps {
   onComplete: () => void
+  onCancel: () => void
 }
 
-export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
+export default function OnboardingModal({ onComplete, onCancel }: OnboardingModalProps) {
   const [currentStep, setCurrentStep] = useState<OnboardingStep>("schoolInfo")
   const [data, setData] = useState<OnboardingData>({
-    name: localStorage.getItem("userName") || "",
+    name: "",
+    email: "",
+    phoneNumber: "",
     schoolType: "colegio",
     schoolName: "",
     currentYear: 1,
-    motivation: "",
-    goals: "",
+    openResponses: createEmptyOpenResponses(),
+    preferenceResponses: createEmptyPreferenceResponses(),
     grades: [],
     selectedPathways: [],
     customTracks: [],
   })
   const [recommendedPathways, setRecommendedPathways] = useState<PathwayData[]>([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [isSavingProfile, setIsSavingProfile] = useState(false)
+
+  const supabase = getSupabaseBrowserClient()
+
+  // Load ONLY the current user's email from Supabase (not previous user's data)
+  useEffect(() => {
+    const loadCurrentUser = async () => {
+      if (supabase) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user?.email) {
+          setData(prev => ({
+            ...prev,
+            email: user.email || "",
+            name: user.user_metadata?.name || "",
+          }))
+        }
+      }
+    }
+    loadCurrentUser()
+  }, [supabase])
 
   const handleNext = async () => {
-    const steps: OnboardingStep[] = ["schoolInfo", "motivation", "goals", "grades", "pathways", "selection", "summary"]
+    const steps: OnboardingStep[] = ["schoolInfo", "knowledge", "preferences", "grades", "pathways", "selection", "summary"]
     const currentIndex = steps.indexOf(currentStep)
 
     if (currentStep === "grades" && currentIndex < steps.length - 1) {
       setIsAnalyzing(true)
       try {
+        // Validate session before API call
+        if (supabase) {
+          const { data: { session } } = await supabase.auth.getSession()
+          if (!session) {
+            throw new Error("Tu sesión ha expirado. Por favor, inicia sesión nuevamente.")
+          }
+        }
+
         const pathways = await analyzeStudentResponses({
           name: data.name,
           schoolType: data.schoolType,
           schoolName: data.schoolName,
           currentYear: data.currentYear,
-          motivation: data.motivation,
-          goals: data.goals,
+          openResponses: data.openResponses,
+          preferenceResponses: data.preferenceResponses,
           grades: data.grades,
         })
         setRecommendedPathways(pathways)
       } catch (error) {
         console.error("[v0] Error analyzing responses:", error)
+        // Show user-friendly error message
+        alert(error instanceof Error ? error.message : "Error al analizar tus respuestas. Por favor, intenta de nuevo.")
       } finally {
         setIsAnalyzing(false)
       }
@@ -81,7 +127,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
   }
 
   const handlePrevious = () => {
-    const steps: OnboardingStep[] = ["schoolInfo", "motivation", "goals", "grades", "pathways", "selection", "summary"]
+    const steps: OnboardingStep[] = ["schoolInfo", "knowledge", "preferences", "grades", "pathways", "selection", "summary"]
     const currentIndex = steps.indexOf(currentStep)
     if (currentIndex > 0) {
       setCurrentStep(steps[currentIndex - 1])
@@ -97,43 +143,91 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
     }))
   }
 
-  const handleComplete = () => {
-    const completeData = {
-      ...data,
-      recommendedPathways,
-      completedAt: new Date().toISOString(),
-      permanent: true, // Mark as permanent - cannot be retaken
+  const handleComplete = async () => {
+    setIsSavingProfile(true)
+    try {
+      const motivationSummary = [data.openResponses.futureVision, data.openResponses.dailyFeeling]
+        .map((value) => value?.trim())
+        .filter(Boolean)
+        .join(" | ")
+      const goalsSummary = [
+        data.openResponses.problemEnjoyment,
+        data.openResponses.skillFocus,
+        data.openResponses.oneWeekJob,
+      ]
+        .map((value) => value?.trim())
+        .filter(Boolean)
+        .join(" | ")
+
+      const completeData = {
+        ...data,
+        recommendedPathways,
+        completedAt: new Date().toISOString(),
+        permanent: true, // Mark as permanent - cannot be retaken
+      }
+      // Note: Data is now saved to Supabase below
+      // localStorage is no longer used to prevent cross-user data contamination
+      // Only save to Supabase for proper user isolation
+
+      if (supabase && completeData.email) {
+        const { error } = await supabase.from("onboarding").upsert({
+          email: completeData.email,
+          name: completeData.name,
+          phone_number: completeData.phoneNumber,
+          school_type: completeData.schoolType,
+          school_name: completeData.schoolName,
+          current_year: completeData.currentYear,
+          motivation: motivationSummary,
+          goals: goalsSummary,
+          grades: completeData.grades,
+          selected_pathways: completeData.selectedPathways,
+          custom_tracks: completeData.customTracks,
+          recommended_pathways: completeData.recommendedPathways,
+          completed_at: completeData.completedAt,
+          permanent: completeData.permanent,
+          profile_payload: completeData,
+          updated_at: new Date().toISOString(),
+        })
+
+        if (error) {
+          console.error("[Onboarding] Error saving on Supabase", error)
+        }
+      }
+      
+      console.warn("[Onboarding] Profile saved permanently:", {
+        name: data.name,
+        pathways: data.selectedPathways,
+        timestamp: new Date().toISOString()
+      })
+    } catch (error) {
+      console.error("[Onboarding] Error completing onboarding", error)
+    } finally {
+      setIsSavingProfile(false)
+      onComplete()
     }
-    // Save onboarding data permanently
-    localStorage.setItem("onboardingData", JSON.stringify(completeData))
-    localStorage.setItem("onboardingComplete", "true")
-    localStorage.setItem("onboardingCompletedDate", new Date().toISOString())
-    
-    console.log("[Onboarding] Profile saved permanently:", {
-      name: data.name,
-      pathways: data.selectedPathways,
-      timestamp: new Date().toISOString()
-    })
-    
-    onComplete()
   }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-fade-in">
       <Card className="w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto animate-slide-up">
         {currentStep === "schoolInfo" && (
-          <SchoolInfoStep data={data} onUpdate={(updates) => setData({ ...data, ...updates })} onNext={handleNext} />
+          <SchoolInfoStep
+            data={data}
+            onUpdate={(updates) => setData({ ...data, ...updates })}
+            onNext={handleNext}
+            onCancel={onCancel}
+          />
         )}
-        {currentStep === "motivation" && (
-          <MotivationStep
+        {currentStep === "knowledge" && (
+          <KnowledgeStep
             data={data}
             onUpdate={(updates) => setData({ ...data, ...updates })}
             onNext={handleNext}
             onPrevious={handlePrevious}
           />
         )}
-        {currentStep === "goals" && (
-          <GoalsStep
+        {currentStep === "preferences" && (
+          <PreferencesStep
             data={data}
             onUpdate={(updates) => setData({ ...data, ...updates })}
             onNext={handleNext}
@@ -178,6 +272,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
             selectedPathways={data.selectedPathways}
             onComplete={handleComplete}
             onPrevious={handlePrevious}
+            isSaving={isSavingProfile}
           />
         )}
       </Card>
@@ -189,10 +284,12 @@ function SchoolInfoStep({
   data,
   onUpdate,
   onNext,
+  onCancel,
 }: {
   data: OnboardingData
   onUpdate: (updates: Partial<OnboardingData>) => void
   onNext: () => void
+  onCancel: () => void
 }) {
   return (
     <div className="p-8">
@@ -218,6 +315,28 @@ function SchoolInfoStep({
         </div>
 
         <div>
+          <label className="block text-sm font-medium mb-2">Tu nombre completo</label>
+          <input
+            type="text"
+            placeholder="Ej: Sofía Martínez"
+            value={data.name}
+            onChange={(e) => onUpdate({ name: e.target.value })}
+            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">Tu correo electrónico</label>
+          <input
+            type="email"
+            placeholder="tu.email@ejemplo.com"
+            value={data.email}
+            onChange={(e) => onUpdate({ email: e.target.value })}
+            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+
+        <div>
           <label className="block text-sm font-medium mb-2">
             Nombre de tu {data.schoolType === "colegio" ? "colegio" : "universidad"}
           </label>
@@ -226,6 +345,17 @@ function SchoolInfoStep({
             placeholder={`Ej: ${data.schoolType === "colegio" ? "Colegio Andrés Bello" : "Universidad de los Andes"}`}
             value={data.schoolName}
             onChange={(e) => onUpdate({ schoolName: e.target.value })}
+            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">Número de WhatsApp</label>
+          <input
+            type="tel"
+            placeholder="+56 9 1234 5678"
+            value={data.phoneNumber}
+            onChange={(e) => onUpdate({ phoneNumber: e.target.value })}
             className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
           />
         </div>
@@ -253,10 +383,14 @@ function SchoolInfoStep({
       </div>
 
       <div className="flex gap-4 mt-8">
-        <Button variant="outline" className="flex-1 bg-transparent" onClick={() => window.location.reload()}>
+        <Button variant="outline" className="flex-1 bg-transparent" onClick={onCancel}>
           Cancelar
         </Button>
-        <Button className="flex-1 bg-primary text-primary-foreground" onClick={onNext} disabled={!data.schoolName}>
+        <Button
+          className="flex-1 bg-primary text-primary-foreground"
+          onClick={onNext}
+          disabled={!data.schoolName || !data.name || !data.email || !data.phoneNumber}
+        >
           Siguiente
         </Button>
       </div>
@@ -264,7 +398,7 @@ function SchoolInfoStep({
   )
 }
 
-function MotivationStep({
+function KnowledgeStep({
   data,
   onUpdate,
   onNext,
@@ -275,27 +409,37 @@ function MotivationStep({
   onNext: () => void
   onPrevious: () => void
 }) {
+  const allAnswered = Object.values(data.openResponses).every((answer) => answer.trim().length > 0)
+
   return (
     <div className="p-8">
-      <h2 className="text-2xl font-bold text-foreground mb-2">¿Qué te motiva?</h2>
-      <p className="text-muted-foreground mb-6">Una pregunta a la vez - comencemos</p>
+      <h2 className="text-2xl font-bold text-foreground mb-2">Tu Visión Personal</h2>
+      <p className="text-muted-foreground mb-6">Comparte tus respuestas para que la IA entienda qué te inspira</p>
 
-      <div>
-        <label className="block text-sm font-medium mb-4">¿Cuál es tu principal motivación en tu carrera?</label>
-        <textarea
-          value={data.motivation}
-          onChange={(e) => onUpdate({ motivation: e.target.value })}
-          placeholder="Ej: Quiero ayudar a mi comunidad, busco estabilidad económica, me apasiona la tecnología..."
-          rows={4}
-          className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-        />
+      <div className="space-y-4">
+        {OPEN_ENDED_QUESTIONS.map((question) => (
+          <OpenEnded
+            key={question.id}
+            label={question.label}
+            value={data.openResponses[question.id]}
+            placeholder={question.placeholder}
+            onChange={(value) =>
+              onUpdate({
+                openResponses: {
+                  ...data.openResponses,
+                  [question.id]: value,
+                },
+              })
+            }
+          />
+        ))}
       </div>
 
       <div className="flex gap-4 mt-8">
         <Button variant="outline" className="flex-1 bg-transparent" onClick={onPrevious}>
           Anterior
         </Button>
-        <Button className="flex-1 bg-primary text-primary-foreground" onClick={onNext} disabled={!data.motivation}>
+        <Button className="flex-1 bg-primary text-primary-foreground" onClick={onNext} disabled={!allAnswered}>
           Siguiente
         </Button>
       </div>
@@ -303,7 +447,7 @@ function MotivationStep({
   )
 }
 
-function GoalsStep({
+function PreferencesStep({
   data,
   onUpdate,
   onNext,
@@ -314,27 +458,38 @@ function GoalsStep({
   onNext: () => void
   onPrevious: () => void
 }) {
+  const allAnswered = Object.values(data.preferenceResponses).every((answer) => answer.trim().length > 0)
+
   return (
     <div className="p-8">
-      <h2 className="text-2xl font-bold text-foreground mb-2">Tus Objetivos</h2>
-      <p className="text-muted-foreground mb-6">Una pregunta a la vez</p>
+      <h2 className="text-2xl font-bold text-foreground mb-2">Tu Estilo Preferido</h2>
+      <p className="text-muted-foreground mb-6">Selecciona la opción que mejor describa tu forma de aprender y trabajar</p>
 
-      <div>
-        <label className="block text-sm font-medium mb-4">¿Cuáles son tus metas para los próximos 3-5 años?</label>
-        <textarea
-          value={data.goals}
-          onChange={(e) => onUpdate({ goals: e.target.value })}
-          placeholder="Ej: Quiero estudiar en una universidad internacional, conseguir una beca, trabajar en una startup..."
-          rows={4}
-          className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-        />
+      <div className="space-y-5">
+        {PREFERENCE_QUESTIONS.map((question) => (
+          <div key={question.id}>
+            <label className="block text-sm font-medium mb-3">{question.question}</label>
+            <MultipleChoice
+              options={question.options}
+              selected={data.preferenceResponses[question.id]}
+              onSelect={(option) =>
+                onUpdate({
+                  preferenceResponses: {
+                    ...data.preferenceResponses,
+                    [question.id]: option,
+                  },
+                })
+              }
+            />
+          </div>
+        ))}
       </div>
 
       <div className="flex gap-4 mt-8">
         <Button variant="outline" className="flex-1 bg-transparent" onClick={onPrevious}>
           Anterior
         </Button>
-        <Button className="flex-1 bg-primary text-primary-foreground" onClick={onNext} disabled={!data.goals}>
+        <Button className="flex-1 bg-primary text-primary-foreground" onClick={onNext} disabled={!allAnswered}>
           Siguiente
         </Button>
       </div>
@@ -403,7 +558,15 @@ function GradesStep({
             max="10"
             step="0.5"
             value={grade}
-            onChange={(e) => setGrade(Number.parseFloat(e.target.value))}
+            onChange={(e) => {
+              const value = e.target.value
+              if (value === '' || value === null) {
+                setGrade(0)
+              } else {
+                const parsed = Number.parseFloat(value)
+                setGrade(isNaN(parsed) ? 0 : parsed)
+              }
+            }}
             className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
           />
         </div>
@@ -578,11 +741,13 @@ function SummaryStep({
   selectedPathways,
   onComplete,
   onPrevious,
+  isSaving,
 }: {
   data: OnboardingData
   selectedPathways: string[]
   onComplete: () => void
   onPrevious: () => void
+  isSaving: boolean
 }) {
   return (
     <div className="p-8">
@@ -628,8 +793,8 @@ function SummaryStep({
         <Button variant="outline" className="flex-1 bg-transparent" onClick={onPrevious}>
           Anterior
         </Button>
-        <Button className="flex-1 bg-primary text-primary-foreground text-lg py-6" onClick={onComplete}>
-          🎓 Comenzar Mi Ruta
+        <Button className="flex-1 bg-primary text-primary-foreground text-lg py-6" onClick={onComplete} disabled={isSaving}>
+          {isSaving ? "Guardando..." : "🎓 Comenzar Mi Ruta"}
         </Button>
       </div>
     </div>

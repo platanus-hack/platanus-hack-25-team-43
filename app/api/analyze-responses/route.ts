@@ -14,8 +14,8 @@
  * @input {string} schoolType - "colegio" or "universidad"
  * @input {string} schoolName - Name of institution
  * @input {number} currentYear - Current academic year
- * @input {string} motivation - Career motivation text
- * @input {string} goals - 3-5 year goals text
+ * @input {Object} openResponses - Map of open-ended reflections
+ * @input {Object} preferenceResponses - Map of multiple-choice preferences
  * @input {Array} grades - Array of {subject: string, grade: number}
  * 
  * @output {Object} response
@@ -37,8 +37,25 @@
  *   "schoolType": "universidad",
  *   "schoolName": "Universidad de los Andes",
  *   "currentYear": 2,
- *   "motivation": "Quiero ayudar a mi comunidad con tecnología",
- *   "goals": "Trabajar en una startup tech internacional",
+ *   "openResponses": {
+ *     "futureVision": "Dirijo proyectos de impacto social y tecnológico...",
+ *     "dailyFeeling": "Propósito y emoción cada mañana",
+ *     "problemEnjoyment": "Retos complejos que mezclan datos y personas",
+ *     "skillFocus": "Product management y storytelling",
+ *     "oneWeekJob": "Product Manager en una startup de salud"
+ *   },
+ *   "preferenceResponses": {
+ *     "consideredCollege": "Sí",
+ *     "wantsCollege": "Tal vez",
+ *     "environmentComfort": "Interiores",
+ *     "workStyle": "Una mezcla de ambos",
+ *     "dayPreference": "Algo diferente cada día",
+ *     "workPace": "Una mezcla según la tarea",
+ *     "taskComfort": "Tareas donde puedes sumar tus ideas",
+ *     "activityPreference": "Una combinación de ambas",
+ *     "technologyComfort": "Me siento cómodo/a y hasta lo disfruto",
+ *     "communicationStyle": "Hablar con grupos pequeños"
+ *   },
  *   "grades": [
  *     { "subject": "Matemáticas", "grade": 9.5 },
  *     { "subject": "Programación", "grade": 9.0 }
@@ -65,11 +82,21 @@
 
 import { anthropic } from "@ai-sdk/anthropic"
 import { generateText } from "ai"
+import { OPEN_ENDED_QUESTIONS, PREFERENCE_QUESTIONS } from "@/lib/onboarding-questions"
+import { requireAuth } from "@/lib/auth-middleware"
 
 export async function POST(request: Request) {
   try {
+    // Authenticate user
+    const auth = await requireAuth(request)
+    if (!auth.authorized || !auth.user) {
+      return auth.response
+    }
+
     const body = await request.json()
-    const { name, schoolType, schoolName, currentYear, motivation, goals, grades } = body
+    const { name, schoolType, schoolName, currentYear, grades } = body
+    const openResponses: Record<string, string> = body.openResponses ?? {}
+    const preferenceResponses: Record<string, string> = body.preferenceResponses ?? {}
 
     // Calculate average grade
     const averageGrade =
@@ -87,6 +114,16 @@ export async function POST(request: Request) {
             .join(", ")
         : "N/A"
 
+    const openEndedContext = OPEN_ENDED_QUESTIONS.map((question) => {
+      const answer = openResponses?.[question.id]?.trim()
+      return `- ${question.label}: ${answer && answer.length > 0 ? answer : "Sin respuesta"}`
+    }).join("\n")
+
+    const preferenceContext = PREFERENCE_QUESTIONS.map((question) => {
+      const answer = preferenceResponses?.[question.id]?.trim()
+      return `- ${question.question}: ${answer && answer.length > 0 ? answer : "Sin respuesta"}`
+    }).join("\n")
+
     // Create a comprehensive prompt for LLM analysis
     const prompt = `
 You are a career counselor analyzing a student's profile to recommend 3 career pathways. 
@@ -99,9 +136,11 @@ Student Profile:
 - Average Grade: ${averageGrade}/10
 - Top Subjects: ${topSubjects}
 
-Student's Responses:
-- Career Motivation: ${motivation}
-- Goals (3-5 years): ${goals}
+Reflexiones Abiertas:
+${openEndedContext}
+
+Preferencias y estilo:
+${preferenceContext}
 
 Based on this information, provide exactly 3 recommended career pathways. For each pathway:
 1. Explain why it matches the student's profile
@@ -121,24 +160,32 @@ Format your response as JSON with this structure:
   ]
 }
 
-Ensure recommendations are ambitious yet achievable for a LATAM student looking to advance internationally.
-Focus on practical, actionable pathways that align with their interests and academic strengths.
+Ensure recommendations are ambitious yet achievable for a LATAM student looking to advance internacionalmente.
+Focus on practical, actionable pathways that align with their interests, emociones deseadas y estilo de trabajo preferido.
     `.trim()
 
     // Check if Anthropic API key is configured
     if (!process.env.ANTHROPIC_API_KEY) {
-      console.error("[v0] Anthropic API key not configured")
+      console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+      console.error("⚠️  CRITICAL: Missing ANTHROPIC_API_KEY")
+      console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+      console.error("\n🔴 The AI pathway analysis requires an Anthropic API key.")
+      console.error("\n📝 To fix this:")
+      console.error("   1. Get an API key from: https://console.anthropic.com/")
+      console.error("   2. Add it to your .env.local file:")
+      console.error("      ANTHROPIC_API_KEY=sk-ant-...")
+      console.error("   3. Restart your development server")
+      console.error("\n📖 See SETUP.md for detailed instructions.")
+      console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+      
       return Response.json(
         {
           success: false,
-          error: "Anthropic API key not configured. Please add ANTHROPIC_API_KEY to your .env.local file.",
+          error: "AI analysis is not configured. The ANTHROPIC_API_KEY environment variable is missing. Please contact the administrator or see the console for setup instructions.",
         },
         { status: 500 },
       )
     }
-
-    // Debug: Log API key presence (first 10 chars only for security)
-    console.log("[v0] API Key present:", process.env.ANTHROPIC_API_KEY?.substring(0, 15) + "...")
 
     const { text } = await generateText({
       model: anthropic("claude-3-haiku-20240307"),

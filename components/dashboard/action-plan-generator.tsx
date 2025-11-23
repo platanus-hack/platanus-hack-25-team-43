@@ -18,8 +18,8 @@
  * @props {string} userData.schoolType - "colegio" or "universidad"
  * @props {string} userData.schoolName - Institution name
  * @props {number} userData.currentYear - Current academic year
- * @props {string} userData.motivation - Career motivation
- * @props {string} userData.goals - 3-5 year goals
+ * @props {Object} userData.openResponses - Open-ended onboarding answers
+ * @props {Object} userData.preferenceResponses - Multiple-choice preferences
  * @props {Function} onPlanGenerated - Callback when plan is created
  * 
  * @state {boolean} isGenerating - Whether plan is being generated
@@ -51,8 +51,25 @@
  *     schoolType: "universidad",
  *     schoolName: "UdeA",
  *     currentYear: 2,
- *     motivation: "Tech innovation",
- *     goals: "Work at Google"
+ *     openResponses: {
+ *       futureVision: "Liderar productos tech con impacto social",
+ *       dailyFeeling: "Curiosidad y propósito cada día",
+ *       problemEnjoyment: "Retos donde combino datos y personas",
+ *       skillFocus: "Storytelling y análisis avanzado",
+ *       oneWeekJob: "Product Manager en una startup healthtech"
+ *     },
+ *     preferenceResponses: {
+ *       consideredCollege: "Sí",
+ *       wantsCollege: "Sí",
+ *       environmentComfort: "Interiores",
+ *       workStyle: "Una mezcla de ambos",
+ *       dayPreference: "Algo intermedio",
+ *       workPace: "Un ritmo rápido y energético",
+ *       taskComfort: "Tareas donde puedes sumar tus ideas",
+ *       activityPreference: "Una combinación de ambas",
+ *       technologyComfort: "Me siento cómodo/a y hasta lo disfruto",
+ *       communicationStyle: "Hablar con grupos pequeños"
+ *     }
  *   }}
  *   onPlanGenerated={(plan) => console.log(plan)}
  * />
@@ -65,6 +82,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { generateActionPlan } from "@/lib/action-plan-client"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import type { OpenEndedResponses, PreferenceResponses } from "@/lib/onboarding-questions"
 
 interface ActionPlanGeneratorProps {
   userData: {
@@ -73,8 +91,8 @@ interface ActionPlanGeneratorProps {
     schoolType: string
     schoolName: string
     currentYear: number
-    motivation: string
-    goals: string
+    openResponses: OpenEndedResponses
+    preferenceResponses: PreferenceResponses
   }
   onPlanGenerated: (plan: any) => void
 }
@@ -98,8 +116,8 @@ export default function ActionPlanGenerator({ userData, onPlanGenerated }: Actio
           schoolName: userData.schoolName,
           currentYear: userData.currentYear,
         },
-        motivation: userData.motivation,
-        goals: userData.goals,
+        openResponses: userData.openResponses,
+        preferenceResponses: userData.preferenceResponses,
       })
 
       setGeneratedPlan(plan)

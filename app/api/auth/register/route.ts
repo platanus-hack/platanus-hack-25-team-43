@@ -1,5 +1,5 @@
-// In-memory user store (for development only - use a database in production!)
-const users = new Map<string, { id: string; email: string; password: string; name: string; createdAt: string }>()
+import { getSupabaseServerClient } from "@/lib/supabase-server"
+import { NextResponse } from "next/server"
 
 export async function POST(request: Request) {
   try {
@@ -7,39 +7,65 @@ export async function POST(request: Request) {
     const { email, password, name } = body
 
     if (!email || !password || !name) {
-      return Response.json({ success: false, error: "Missing required fields" }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: "Missing required fields" },
+        { status: 400 }
+      )
     }
 
-    // Check if user already exists
-    if (users.has(email)) {
-      return Response.json({ success: false, error: "User already exists" }, { status: 400 })
+    // Validate password length
+    if (password.length < 6) {
+      return NextResponse.json(
+        { success: false, error: "Password must be at least 6 characters" },
+        { status: 400 }
+      )
     }
 
-    const userId = Math.random().toString(36).substr(2, 9)
-    users.set(email, {
-      id: userId,
+    const supabase = await getSupabaseServerClient()
+
+    // Sign up the user using Supabase
+    const { data, error } = await supabase.auth.signUp({
       email,
-      password, // In production, hash this!
-      name,
-      createdAt: new Date().toISOString(),
+      password,
+      options: {
+        data: { name }, // Store name in user metadata
+      },
     })
 
-    return Response.json({
+    if (error) {
+      console.error("[auth] Registration error:", error)
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 400 }
+      )
+    }
+
+    if (!data.user) {
+      return NextResponse.json(
+        { success: false, error: "Registration failed: No user returned" },
+        { status: 500 }
+      )
+    }
+
+    // Return success with user data
+    return NextResponse.json({
       success: true,
-      user: { id: userId, email, name },
-      token: userId,
+      user: {
+        id: data.user.id,
+        email: data.user.email,
+        name: data.user.user_metadata.name,
+      },
+      session: data.session,
+      needsConfirmation: !data.session, // true if email confirmation is required
     })
   } catch (error) {
-    console.error("[v0] Registration error:", error)
-    return Response.json(
+    console.error("[auth] Registration error:", error)
+    return NextResponse.json(
       {
         success: false,
         error: error instanceof Error ? error.message : "Registration failed",
       },
-      { status: 500 },
+      { status: 500 }
     )
   }
 }
-
-// Export the users store so login can access it
-export { users }

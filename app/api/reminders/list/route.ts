@@ -1,29 +1,44 @@
+import { requireAuth } from "@/lib/auth-middleware"
+import { getSupabaseServerClient } from "@/lib/supabase-server"
+import { NextResponse } from "next/server"
+
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url)
-    const phoneNumber = searchParams.get("phoneNumber")
-
-    if (!phoneNumber) {
-      return Response.json({ success: false, error: "Phone number required" }, { status: 400 })
+    // Authenticate user
+    const auth = await requireAuth(request)
+    if (!auth.authorized || !auth.user) {
+      return auth.response
     }
 
-    const reminders = JSON.parse(localStorage.getItem("whatsappReminders") || "[]")
-    const userReminders = reminders.filter((r: any) => r.phoneNumber === phoneNumber)
+    const supabase = await getSupabaseServerClient()
 
-    return Response.json({
+    // Fetch reminders for the authenticated user
+    const { data, error } = await supabase
+      .from("reminders")
+      .select("*")
+      .eq("user_id", auth.user.id)
+      .order("scheduled_for", { ascending: true })
+
+    if (error) {
+      console.error("[reminders] Error fetching reminders:", error)
+      return NextResponse.json(
+        { success: false, error: "Failed to fetch reminders" },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({
       success: true,
-      reminders: userReminders,
-      count: userReminders.length,
-      upcoming: userReminders.filter((r: any) => !r.sent).length,
+      reminders: data || [],
     })
   } catch (error) {
-    console.error("[v0] Error fetching reminders:", error)
-    return Response.json(
+    console.error("[reminders] Error fetching reminders:", error)
+    return NextResponse.json(
       {
         success: false,
         error: error instanceof Error ? error.message : "Failed to fetch reminders",
       },
-      { status: 500 },
+      { status: 500 }
     )
   }
 }

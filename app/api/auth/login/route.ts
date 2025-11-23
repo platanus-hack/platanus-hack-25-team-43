@@ -1,5 +1,5 @@
-// Import the users store from register route
-import { users } from "../register/route"
+import { getSupabaseServerClient } from "@/lib/supabase-server"
+import { NextResponse } from "next/server"
 
 export async function POST(request: Request) {
   try {
@@ -7,28 +7,53 @@ export async function POST(request: Request) {
     const { email, password } = body
 
     if (!email || !password) {
-      return Response.json({ success: false, error: "Email and password required" }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: "Email and password required" },
+        { status: 400 }
+      )
     }
 
-    const user = users.get(email)
+    const supabase = await getSupabaseServerClient()
 
-    if (!user || user.password !== password) {
-      return Response.json({ success: false, error: "Invalid credentials" }, { status: 401 })
+    // Sign in the user using Supabase
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    if (error) {
+      console.error("[auth] Login error:", error)
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 401 }
+      )
     }
 
-    return Response.json({
+    if (!data.session) {
+      return NextResponse.json(
+        { success: false, error: "Login failed: No session created" },
+        { status: 500 }
+      )
+    }
+
+    // Return success with user and session data
+    return NextResponse.json({
       success: true,
-      user: { id: user.id, email: user.email, name: user.name },
-      token: user.id,
+      user: {
+        id: data.user.id,
+        email: data.user.email,
+        name: data.user.user_metadata?.name || data.user.email,
+      },
+      session: data.session,
     })
   } catch (error) {
-    console.error("[v0] Login error:", error)
-    return Response.json(
+    console.error("[auth] Login error:", error)
+    return NextResponse.json(
       {
         success: false,
         error: error instanceof Error ? error.message : "Login failed",
       },
-      { status: 500 },
+      { status: 500 }
     )
   }
 }
